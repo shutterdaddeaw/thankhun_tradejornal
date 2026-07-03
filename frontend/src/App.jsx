@@ -20,6 +20,7 @@ import {
   Mail,
   Sliders,
   Eye,
+  EyeOff,
   Settings,
   ArrowUpRight,
   Wallet,
@@ -56,6 +57,15 @@ function App() {
   const [page, setPage] = useState('login'); // login, register, dashboard, public
   const [token, setToken] = useState(localStorage.getItem('access_token') || '');
   const [user, setUser] = useState(null);
+  const [hideBalances, setHideBalances] = useState(localStorage.getItem('hide_balances') === 'true');
+
+  const toggleHideBalances = () => {
+    setHideBalances(prev => {
+      const next = !prev;
+      localStorage.setItem('hide_balances', next.toString());
+      return next;
+    });
+  };
   
   // Dashboard states
   const [accounts, setAccounts] = useState([]);
@@ -1351,15 +1361,15 @@ function App() {
           <div className="nav-actions">
             <div className="nav-user">
               <User size={16} />
-              <span>{user?.full_name}</span>
+              <span className="nav-user-text">{user?.full_name}</span>
             </div>
             <button className="btn-secondary" style={{ marginRight: '8px', padding: '8px 14px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px', width: 'auto' }} onClick={() => setShowSettingsModal(true)}>
               <Cpu size={14} style={{ color: 'var(--accent-secondary)' }} />
-              ตั้งค่าระบบ AI
+              <span className="nav-btn-text">ตั้งค่าระบบ AI</span>
             </button>
             <button className="btn-logout" onClick={handleLogout}>
               <LogOut size={16} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
-              ออกจากระบบ
+              <span className="nav-btn-text">ออกจากระบบ</span>
             </button>
           </div>
         ) : (
@@ -1376,7 +1386,7 @@ function App() {
         {/* Top Control Bar */}
         {page !== 'public' ? (
           <div className="account-selector-bar">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
               <select 
                 className="account-select" 
                 value={selectedAccountId} 
@@ -1395,16 +1405,28 @@ function App() {
                 ))}
                 {accounts.length === 0 && <option value="">ไม่มีบัญชีเชื่อมต่อ</option>}
               </select>
+
+              {/* Privacy Eye Toggle Button */}
+              {selectedAccountId && (
+                <button 
+                  className={`btn-secondary ${hideBalances ? 'active' : ''}`}
+                  onClick={toggleHideBalances}
+                  title={hideBalances ? "แสดงตัวเลขยอดเงิน" : "ซ่อนตัวเลขยอดเงิน"}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '10px', height: '38px', width: '38px', borderRadius: '8px' }}
+                >
+                  {hideBalances ? <EyeOff size={15} style={{ color: 'var(--accent-secondary)' }} /> : <Eye size={15} />}
+                </button>
+              )}
               
               {selectedAccountId && (
                 <button 
                   className="btn-secondary" 
                   onClick={() => loadAccountData(selectedAccountId)} 
                   disabled={isSyncing}
-                  style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', height: '38px' }}
                 >
                   <RefreshCw size={14} className={isSyncing ? 'spin-anim' : ''} />
-                  {isSyncing ? 'กำลังซิงค์...' : 'รีเฟรช'}
+                  <span className="btn-text">{isSyncing ? 'กำลังซิงค์...' : 'รีเฟรช'}</span>
                 </button>
               )}
 
@@ -1412,15 +1434,15 @@ function App() {
                 <button 
                   className="btn-secondary" 
                   onClick={openEditAccountModal} 
-                  style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-secondary)' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-secondary)', height: '38px' }}
                 >
                   <Edit size={14} />
-                  แก้ไขพอร์ต
+                  <span className="btn-text">แก้ไขพอร์ต</span>
                 </button>
               )}
             </div>
 
-            <div style={{ display: 'flex', gap: '12px' }}>
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
               {selectedAccountId && (
                 <>
                   <button 
@@ -1432,34 +1454,32 @@ function App() {
                         setShowGuideModal(true);
                       }
                     }}
-                    style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '8px', height: '38px' }}
                   >
                     <BookOpen size={14} />
-                    คู่มือติดตั้ง EA
+                    <span className="btn-text">คู่มือติดตั้ง EA</span>
                   </button>
                   
                   <button 
                     className="btn-secondary"
                     onClick={() => {
-                      // Fetch link if exists
-                      // Set default states
                       setShowShareModal(true);
                     }}
-                    style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '8px', height: '38px' }}
                   >
                     <LinkIcon size={14} />
-                    แชร์พอร์ต
+                    <span className="btn-text">แชร์พอร์ต</span>
                   </button>
                 </>
               )}
               
               <button 
                 className="btn-primary" 
-                style={{ width: 'auto', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px' }}
+                style={{ width: 'auto', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px', height: '38px' }}
                 onClick={() => setShowAddAccountModal(true)}
               >
                 <Plus size={16} />
-                เพิ่มพอร์ต MT5
+                <span className="btn-text">เพิ่มพอร์ต MT5</span>
               </button>
             </div>
           </div>
@@ -1573,18 +1593,18 @@ function App() {
                             </span>
                           </td>
                           <td>
-                            {acc.balance.toLocaleString()} {acc.currency}
+                            {hideBalances ? '••••' : `${acc.balance.toLocaleString()} ${acc.currency}`}
                             {isCentCurrency(acc.currency) && (
                               <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                (${(acc.balance / 100).toLocaleString()} USD)
+                                {hideBalances ? '($•••• USD)' : `(${(acc.balance / 100).toLocaleString()} USD)`}
                               </span>
                             )}
                           </td>
                           <td>
-                            {acc.equity.toLocaleString()} {acc.currency}
+                            {hideBalances ? '••••' : `${acc.equity.toLocaleString()} ${acc.currency}`}
                             {isCentCurrency(acc.currency) && (
                               <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                (${(acc.equity / 100).toLocaleString()} USD)
+                                {hideBalances ? '($•••• USD)' : `(${(acc.equity / 100).toLocaleString()} USD)`}
                               </span>
                             )}
                           </td>
@@ -1726,16 +1746,18 @@ function App() {
               </div>
 
               {/* Card 8: Final Balance */}
-              <div className="stat-card">
-                <div className="stat-card-glow" style={{ background: 'var(--accent-primary)' }}></div>
+              <div className="stat-card stat-card-featured">
+                <div className="stat-card-glow" style={{ background: 'var(--accent-secondary)' }}></div>
                 <div className="stat-label">
-                  <Wallet size={14} style={{ color: 'var(--accent-primary)' }} />
+                  <Wallet size={14} style={{ color: 'var(--accent-secondary)' }} />
                   FINAL BALANCE
                 </div>
                 <div className="stat-value" style={{ fontSize: '1.6rem', color: '#fff' }}>
-                  {advancedStats.finalBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })} {advancedStats.currency}
+                  {hideBalances ? '••••' : `${advancedStats.finalBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })} ${advancedStats.currency}`}
                 </div>
-                <div className="stat-desc">started at ${advancedStats.startingBalance.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                <div className="stat-desc">
+                  {hideBalances ? 'started at $••••' : `started at $${advancedStats.startingBalance.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+                </div>
               </div>
 
             </div>
@@ -1806,11 +1828,14 @@ function App() {
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                     <XAxis dataKey="date" stroke="var(--text-muted)" fontSize={11} tickLine={false} />
-                    <YAxis stroke="var(--text-muted)" fontSize={11} tickLine={false} />
+                    <YAxis hide={hideBalances} stroke="var(--text-muted)" fontSize={11} tickLine={false} />
                     <Tooltip 
                       contentStyle={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-color)', borderRadius: '8px' }}
                       labelStyle={{ color: '#fff', fontWeight: '600' }}
                       formatter={(value, name, props) => {
+                        if (hideBalances) {
+                          return ['••••', name];
+                        }
                         const payload = props.payload;
                         const formattedVal = `${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${advancedStats.currency}`;
                         if (name === "Balance" && payload) {
