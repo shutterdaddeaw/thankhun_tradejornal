@@ -2085,7 +2085,7 @@ function App() {
             <h4 style={{ fontSize: '1rem', marginTop: '20px', marginBottom: '8px', color: '#fff' }}>ขั้นตอนย่อในการเริ่มรัน:</h4>
             <ol style={{ marginLeft: '20px', fontSize: '0.9rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <li>เปิด MT5 แล้วไปที่ <strong>Tools</strong> &rarr; <strong>Options</strong> &rarr; <strong>Expert Advisors</strong> และกดติ๊กเปิด <strong>Allow WebRequest for listed URL:</strong> จากนั้นเพิ่ม <code>{API_BASE_URL}</code> ลงไป</li>
-              <li>ดาวน์โหลดไฟล์สคริปต์ <a href={`${API_BASE_URL}/static/JornaltradePublisherEA.mq5`} style={{ color: 'var(--accent-secondary)' }} target="_blank" rel="noreferrer">JornaltradePublisherEA.mq5</a> ไปวางในโฟลเดอร์ <code>MQL5/Experts</code> ของตัว MT5</li>
+              <li>ดาวน์โหลดไฟล์สคริปต์ <a href={`${API_BASE_URL}/static/JornaltradePublisherEA.ex5`} style={{ color: 'var(--accent-secondary)' }} target="_blank" rel="noreferrer">JornaltradePublisherEA.ex5</a> ไปวางในโฟลเดอร์ <code>MQL5/Experts</code> ของตัว MT5</li>
               <li>เปิดกราฟว่างคู่ใดก็ได้ในโปรแกรม MT5 (เช่น EURUSD) ขึ้นมา 1 ตัว (แยกจากกราฟปกติที่ EA เทรดรันอยู่)</li>
               <li>ลาก EA ตัวนี้ลงกราฟ แล้วใส่ <strong>Publisher Token</strong> ที่ก๊อปปี้ไว้ลงในช่อง Inputs ของตัว EA</li>
               <li>ระบบจะทำการซิงค์ออเดอร์ในอดีตทั้งหมดของพอร์ตขึ้นมาโดยอัตโนมัติภายใน 1 นาที</li>
