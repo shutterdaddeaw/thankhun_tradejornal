@@ -91,6 +91,7 @@ function App() {
   const [editServerName, setEditServerName] = useState('');
   const [editLeverage, setEditLeverage] = useState('100');
   const [editConnectionType, setEditConnectionType] = useState('publisher_ea');
+  const [editCurrency, setEditCurrency] = useState('USD');
   const [isAiLoading, setIsAiLoading] = useState(false);
 
   // Form states
@@ -297,6 +298,7 @@ function App() {
       setEditServerName(activeAcc.server_name);
       setEditLeverage(activeAcc.leverage.toString());
       setEditConnectionType(activeAcc.connection_type);
+      setEditCurrency(activeAcc.currency || 'USD');
       setShowEditAccountModal(true);
     }
   };
@@ -312,7 +314,8 @@ function App() {
           broker_name: editBrokerName,
           server_name: editServerName,
           leverage: parseInt(editLeverage),
-          connection_type: editConnectionType
+          connection_type: editConnectionType,
+          currency: editCurrency
         })
       });
       if (res.ok) {
@@ -550,27 +553,79 @@ function App() {
     try {
       // 1. Stats
       const statsRes = await fetch(`${API_BASE_URL}/v1/accounts/${accountId}/dashboard`, { headers: getHeaders() });
-      if (statsRes.ok) setDashboardStats(await statsRes.json());
+      let statsData = null;
+      if (statsRes.ok) statsData = await statsRes.json();
+      if (!statsData) return;
+
+      const isCent = isCentCurrency(statsData.currency);
+      if (isCent) {
+        statsData.balance = statsData.balance / 100;
+        statsData.equity = statsData.equity / 100;
+        statsData.floating_profit = statsData.floating_profit / 100;
+        statsData.total_profit = statsData.total_profit / 100;
+        statsData.currency = 'USD'; // Show in USD
+      }
+      setDashboardStats(statsData);
 
       // 2. Equity Curve
       const curveRes = await fetch(`${API_BASE_URL}/v1/accounts/${accountId}/equity-curve`, { headers: getHeaders() });
-      if (curveRes.ok) setEquityCurve(await curveRes.json());
+      if (curveRes.ok) {
+        let curveData = await curveRes.json();
+        if (isCent) {
+          curveData = curveData.map(pt => ({
+            ...pt,
+            balance: pt.balance / 100,
+            equity: pt.equity / 100,
+            floating_profit: pt.floating_profit / 100
+          }));
+        }
+        setEquityCurve(curveData);
+      }
 
       // 3. Calendar PNL
       const calRes = await fetch(`${API_BASE_URL}/v1/accounts/${accountId}/calendar`, { headers: getHeaders() });
-      if (calRes.ok) setCalendarPnl(await calRes.json());
+      if (calRes.ok) {
+        let calData = await calRes.json();
+        if (isCent) {
+          calData = calData.map(day => ({
+            ...day,
+            profit: day.profit / 100
+          }));
+        }
+        setCalendarPnl(calData);
+      }
 
       // 4. Open Positions
       const posRes = await fetch(`${API_BASE_URL}/v1/accounts/${accountId}/positions`, { headers: getHeaders() });
       if (posRes.ok) {
-        setOpenPositions(await posRes.json());
+        let posData = await posRes.json();
+        if (isCent) {
+          posData = posData.map(p => ({
+            ...p,
+            profit: p.profit / 100,
+            swap: p.swap / 100,
+            commission: p.commission / 100
+          }));
+        }
+        setOpenPositions(posData);
       } else {
         setOpenPositions([]);
       }
 
       // 5. Closed Trades
       const tradesRes = await fetch(`${API_BASE_URL}/v1/accounts/${accountId}/trades`, { headers: getHeaders() });
-      if (tradesRes.ok) setClosedTrades(await tradesRes.json());
+      if (tradesRes.ok) {
+        let tradesData = await tradesRes.json();
+        if (isCent) {
+          tradesData = tradesData.map(t => ({
+            ...t,
+            profit: t.profit / 100,
+            swap: t.swap / 100,
+            commission: t.commission / 100
+          }));
+        }
+        setClosedTrades(tradesData);
+      }
 
       // 6. Set AI Summary Placeholder
       setAiSummary("### 🤖 บทวิเคราะห์พฤติกรรมการเทรดเชิงจิตวิทยา\n\nระบบดึงสถิติตามช่วงเวลาและ Magic Number เรียบร้อยแล้ว กดปุ่มด้านล่างเพื่อเริ่มเชื่อมต่อและส่งค่าไปให้ระบบ AI ตัวจริงวิเคราะห์ความเสี่ยงและจุดอ่อนของพอร์ตนี้");
@@ -584,17 +639,60 @@ function App() {
   const loadPublicData = async (slug) => {
     try {
       const statsRes = await fetch(`${API_BASE_URL}/p/${slug}`);
-      if (statsRes.ok) setDashboardStats(await statsRes.json());
+      let statsData = null;
+      if (statsRes.ok) statsData = await statsRes.json();
+      if (!statsData) return;
+
+      const isCent = isCentCurrency(statsData.currency);
+      if (isCent) {
+        statsData.balance = statsData.balance / 100;
+        statsData.equity = statsData.equity / 100;
+        statsData.floating_profit = statsData.floating_profit / 100;
+        statsData.total_profit = statsData.total_profit / 100;
+        statsData.currency = 'USD'; // Show in USD
+      }
+      setDashboardStats(statsData);
 
       const curveRes = await fetch(`${API_BASE_URL}/p/${slug}/equity-curve`);
-      if (curveRes.ok) setEquityCurve(await curveRes.json());
+      if (curveRes.ok) {
+        let curveData = await curveRes.json();
+        if (isCent) {
+          curveData = curveData.map(pt => ({
+            ...pt,
+            balance: pt.balance / 100,
+            equity: pt.equity / 100,
+            floating_profit: pt.floating_profit / 100
+          }));
+        }
+        setEquityCurve(curveData);
+      }
 
       const tradesRes = await fetch(`${API_BASE_URL}/p/${slug}/trades`);
-      if (tradesRes.ok) setClosedTrades(await tradesRes.json());
+      if (tradesRes.ok) {
+        let tradesData = await tradesRes.json();
+        if (isCent) {
+          tradesData = tradesData.map(t => ({
+            ...t,
+            profit: t.profit / 100,
+            swap: t.swap / 100,
+            commission: t.commission / 100
+          }));
+        }
+        setClosedTrades(tradesData);
+      }
       
       const posRes = await fetch(`${API_BASE_URL}/p/${slug}/positions`);
       if (posRes.ok) {
-        setOpenPositions(await posRes.json());
+        let posData = await posRes.json();
+        if (isCent) {
+          posData = posData.map(p => ({
+            ...p,
+            profit: p.profit / 100,
+            swap: p.swap / 100,
+            commission: p.commission / 100
+          }));
+        }
+        setOpenPositions(posData);
       } else {
         setOpenPositions([]);
       }
@@ -2408,6 +2506,24 @@ function App() {
                   value={editServerName} 
                   onChange={(e) => setEditServerName(e.target.value)} 
                 />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">สกุลเงินหลัก (Currency)</label>
+                <select 
+                  className="form-input" 
+                  value={editCurrency} 
+                  onChange={(e) => setEditCurrency(e.target.value)}
+                >
+                  <option value="USD">USD (ดอลลาร์สหรัฐ)</option>
+                  <option value="USC">USC (ดอลลาร์เซ็นต์ - Cent)</option>
+                  <option value="EUR">EUR (ยูโร)</option>
+                  <option value="EURC">EURC (ยูโรเซ็นต์ - Cent)</option>
+                  <option value="THB">THB (บาทไทย)</option>
+                </select>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
+                  * หากเป็นพอร์ตประเภท Cent แต่โบรกเกอร์รายงานเป็น USD ให้เปลี่ยนเป็น **USC** ระบบจะแปลงกำไรและขนาดพอร์ตกลับเป็นดอลลาร์จริงให้เองเมื่อนำไปคำนวณรวมกัน
+                </span>
               </div>
 
               <div className="sections-grid" style={{ gap: '16px', marginBottom: 0 }}>

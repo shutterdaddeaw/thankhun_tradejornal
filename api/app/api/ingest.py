@@ -134,7 +134,11 @@ def bootstrap_account(
     # 1. Update account master details
     account.balance = payload.balance
     account.equity = payload.equity
-    account.currency = payload.currency
+    # Only update currency if the current database currency is not already a cent currency
+    curr_upper = (account.currency or "").upper()
+    is_current_cent = curr_upper in ["USC", "USDC", "EURC", "GBPC", "USCENT", "EURCENT", "CENT"] or curr_upper.endswith("CENT")
+    if not is_current_cent:
+        account.currency = payload.currency
     account.leverage = payload.leverage
     account.status = "active_publisher_ea"
     account.connection_type = "publisher_ea"
