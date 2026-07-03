@@ -5,7 +5,7 @@ echo     THANKHUN Trade Jornal - Server Launcher
 echo ===================================================
 echo.
 echo [*] Starting Backend API (FastAPI) on Port 8088...
-start "Jornaltrade Backend (Port 8088)" cmd /k "cd /d %~dp0backend && .venv\Scripts\python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8088"
+start "Jornaltrade Backend (Port 8088)" cmd /k "cd /d %~dp0api && ..\backend\.venv\Scripts\python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8088"
 
 echo [*] Starting Frontend Web (Vite + React) on Port 5173...
 start "Jornaltrade Frontend (Port 5173)" cmd /k "cd /d %~dp0frontend && npm run dev"
