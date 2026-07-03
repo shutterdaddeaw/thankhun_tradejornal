@@ -3,6 +3,8 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from datetime import timedelta
 from typing import Any
+import requests
+import secrets
 
 from app.core.database import get_db
 from app.core.config import settings
@@ -114,3 +116,70 @@ def update_ai_settings(
     db.commit()
     db.refresh(current_user)
     return current_user
+
+
+@router.get("/config")
+def get_auth_config() -> Any:
+    """Get public auth configuration settings."""
+    return {
+        "google_client_id": settings.GOOGLE_CLIENT_ID
+    }
+
+
+@router.post("/google-login", response_model=Token)
+def google_login(payload: dict, db: Session = Depends(get_db)) -> Any:
+    """Authenticate user using a Google ID token."""
+    id_token = payload.get("credential")
+    if not id_token:
+        raise HTTPException(status_code=400, detail="Missing Google credential token")
+        
+    # Verify token via Google API
+    try:
+        response = requests.get(
+            "https://oauth2.googleapis.com/tokeninfo",
+            params={"id_token": id_token},
+            timeout=5
+        )
+        if not response.ok:
+            raise HTTPException(status_code=400, detail="Invalid Google token")
+        token_info = response.json()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to contact Google verification service: {str(e)}")
+        
+    # Extract claims
+    email = token_info.get("email")
+    name = token_info.get("name", "Google User")
+    if not email:
+        raise HTTPException(status_code=400, detail="Email not provided by Google account")
+        
+    # Find or create user
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        # Generate a random password for user creation (they won't use it anyway)
+        random_pass = secrets.token_hex(16)
+        hashed_password = get_password_hash(random_pass)
+        # For Google Users, username is email prefix
+        username_val = email.split("@")[0]
+        # Check if username exists, if so append random characters
+        exist_user = db.query(User).filter(User.email == email).first()
+        user = User(
+            email=email,
+            hashed_password=hashed_password,
+            full_name=name,
+            is_active=True
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        
+    if not user.is_active:
+        raise HTTPException(status_code=400, detail="Inactive user")
+        
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    refresh_token_expires = timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    
+    return {
+        "access_token": create_access_token(user.id, expires_delta=access_token_expires),
+        "refresh_token": create_refresh_token(user.id, expires_delta=refresh_token_expires),
+        "token_type": "bearer",
+    }

@@ -109,6 +109,104 @@ function App() {
   const [newAccConnType, setNewAccConnType] = useState('publisher_ea');
   const [newAccPassword, setNewAccPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [googleClientId, setGoogleClientId] = useState('');
+
+  // Fetch Google Client ID configuration from backend on mount
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/v1/auth/config`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.google_client_id) {
+            setGoogleClientId(data.google_client_id);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch auth config:', err);
+      }
+    };
+    fetchConfig();
+  }, []);
+
+  const renderGoogleButton = useCallback(() => {
+    const element = document.getElementById('google-login-button');
+    if (element && window.google?.accounts.id) {
+      window.google.accounts.id.renderButton(element, {
+        theme: 'filled_blue',
+        size: 'large',
+        width: 320,
+        text: 'signin_with',
+        shape: 'rectangular',
+      });
+    }
+  }, []);
+
+  const handleGoogleCredentialResponse = useCallback(async (response) => {
+    setErrorMsg('');
+    try {
+      const res = await fetch(`${API_BASE_URL}/v1/auth/google-login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential: response.credential }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        localStorage.setItem('access_token', data.access_token);
+        localStorage.setItem('refresh_token', data.refresh_token);
+        setToken(data.access_token);
+        setPage('dashboard');
+      } else {
+        const data = await res.json();
+        setErrorMsg(data.detail || 'การล็อกอินด้วย Google ล้มเหลว');
+      }
+    } catch (err) {
+      setErrorMsg('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์เพื่อล็อกอิน Google ได้');
+    }
+  }, []);
+
+  // Dynamically load Google Identity Services Script when Client ID is available
+  useEffect(() => {
+    if (!googleClientId) return;
+
+    // Check if script is already present
+    let script = document.querySelector('script[src="https://accounts.google.com/gsi/client"]');
+    if (!script) {
+      script = document.createElement('script');
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.async = true;
+      script.defer = true;
+      script.onload = () => {
+        window.google?.accounts.id.initialize({
+          client_id: googleClientId,
+          callback: handleGoogleCredentialResponse,
+        });
+        renderGoogleButton();
+      };
+      document.head.appendChild(script);
+    } else if (window.google?.accounts.id) {
+      window.google.accounts.id.initialize({
+        client_id: googleClientId,
+        callback: handleGoogleCredentialResponse,
+      });
+      renderGoogleButton();
+    }
+
+    return () => {
+      // Keep script to avoid double loading issues, but cleanup rendering
+    };
+  }, [googleClientId, handleGoogleCredentialResponse, renderGoogleButton]);
+
+  // Trigger button render whenever page changes between login and register
+  useEffect(() => {
+    if (googleClientId && window.google?.accounts.id) {
+      // Delay slightly to allow DOM to render container element
+      const timer = setTimeout(() => {
+        renderGoogleButton();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [googleClientId, page, renderGoogleButton]);
 
   // Check if we are viewing a public link
   useEffect(() => {
@@ -1108,6 +1206,17 @@ function App() {
 
               <button type="submit" className="btn-primary">สมัครสมาชิก</button>
             </form>
+          )}
+
+          {googleClientId && (
+            <div style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', width: '100%', gap: '10px', margin: '8px 0' }}>
+                <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.1)' }} />
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>หรือ</span>
+                <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.1)' }} />
+              </div>
+              <div id="google-login-button" style={{ width: '100%', display: 'flex', justifyContent: 'center' }} />
+            </div>
           )}
 
           <div className="auth-footer">

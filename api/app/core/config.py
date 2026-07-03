@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     # Default is a placeholder, in production it should be set via env
     ENCRYPTION_KEY: str = "v_mJ6mpxP_rE2T7n7wzQe2XQ8UfCg7q83N_K5Hk2X8c="
     
+    # Google Auth Settings (Optional, for Google login)
+    GOOGLE_CLIENT_ID: str = ""
+    
     model_config = ConfigDict(case_sensitive=True, env_file=".env")
 
 settings = Settings()
