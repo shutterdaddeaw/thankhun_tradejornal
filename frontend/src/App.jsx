@@ -250,12 +250,34 @@ function App() {
   };
 
   // API wrappers
+  // API wrappers
   const getHeaders = useCallback(() => {
+    const currentToken = localStorage.getItem('access_token') || token;
     return {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
+      'Authorization': `Bearer ${currentToken}`
     };
   }, [token]);
+
+  const attemptTokenRefresh = async () => {
+    const refreshToken = localStorage.getItem('refresh_token');
+    if (!refreshToken) return false;
+    try {
+      const res = await fetch(`${API_BASE_URL}/v1/auth/refresh?refresh_token=${refreshToken}`, {
+        method: 'POST'
+      });
+      if (res.ok) {
+        const data = await res.json();
+        localStorage.setItem('access_token', data.access_token);
+        localStorage.setItem('refresh_token', data.refresh_token);
+        setToken(data.access_token);
+        return true;
+      }
+    } catch (err) {
+      console.error('Failed to auto-refresh session token:', err);
+    }
+    return false;
+  };
 
   const loadUserData = async () => {
     try {
@@ -269,10 +291,19 @@ function App() {
         setAiApiKey(userData.ai_api_key || '');
         setAiModel(userData.ai_model || '');
         setAiBaseUrl(userData.ai_base_url || '');
+        await loadAccounts();
+      } else if (res.status === 401) {
+        // Access token expired, attempt auto-refresh
+        const refreshed = await attemptTokenRefresh();
+        if (refreshed) {
+          await loadUserData(); // Retry with new token
+        } else {
+          handleLogout();
+        }
       } else {
         setUser({ email: 'thankhun@trader.com', full_name: 'Thankhun Master' });
+        await loadAccounts();
       }
-      await loadAccounts();
     } catch (err) {
       handleLogout();
     }
