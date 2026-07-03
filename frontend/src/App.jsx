@@ -691,7 +691,7 @@ function App() {
       if (activeTab !== 'forex') {
         setActiveTab('networth');
       }
-      loadAllAccountsCombinedData(accounts);
+      loadAllAccountsCombinedData(accounts.filter(a => !a.account_type || a.account_type === 'forex'));
     } else {
       const activeAcc = accounts.find(a => a.id.toString() === accountId);
       if (activeAcc) {
@@ -741,7 +741,7 @@ function App() {
             if (activeTab !== 'forex') {
               setActiveTab('networth');
             }
-            loadAllAccountsCombinedData(data);
+            loadAllAccountsCombinedData(data.filter(a => !a.account_type || a.account_type === 'forex'));
           } else {
             const selectedAcc = data.find(a => a.id.toString() === targetId);
             if (selectedAcc) {
@@ -2201,7 +2201,7 @@ function App() {
                     if (activeTab !== 'forex') {
                       setActiveTab('networth');
                     }
-                    loadAllAccountsCombinedData(accounts);
+                    loadAllAccountsCombinedData(accounts.filter(a => !a.account_type || a.account_type === 'forex'));
                   } else {
                     const selectedAcc = accounts.find(a => a.id.toString() === val);
                     if (selectedAcc) {
@@ -3101,7 +3101,7 @@ function App() {
                 <button className={`sidebar-item ${activeTab === 'forex' ? 'active' : ''}`} onClick={() => {
                   setActiveTab('forex');
                   setSelectedAccountId('all');
-                  loadAllAccountsCombinedData(accounts);
+                  loadAllAccountsCombinedData(accounts.filter(a => !a.account_type || a.account_type === 'forex'));
                 }}>
                   <Activity size={18} />
                   <span className="sidebar-item-text">📈 พอร์ต Forex (MT5)</span>

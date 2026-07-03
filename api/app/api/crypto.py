@@ -310,12 +310,12 @@ def fetch_solana_balances(address: str) -> dict:
             "method": "getBalance",
             "params": [address]
         }
-        res = requests.post(url, json=payload, timeout=4)
+        res = requests.post(url, json=payload, timeout=5)
         if res.status_code == 200:
             result = res.json().get("result", {})
             value = result.get("value", 0)
             sol_balance = float(value) / 1e9
-            if sol_balance > 0.0001:
+            if sol_balance > 0.001:
                 p_feed = get_crypto_prices(["SOL"])
                 sol_price = p_feed.get("SOL", 0.0)
                 tokens["SOL"] = {"balance": sol_balance, "price": sol_price}
@@ -335,28 +335,80 @@ def fetch_solana_balances(address: str) -> dict:
                 {"encoding": "jsonParsed"}
             ]
         }
-        res = requests.post(url, json=payload, timeout=4)
+        res = requests.post(url, json=payload, timeout=8)
         if res.status_code == 200:
             result = res.json().get("result", {}).get("value", [])
+            
+            # Stablecoin mints (always $1)
+            STABLECOINS = {
+                "EPjFWdd5AufqSSjN7mvkyCeqMTJ5k91yZYJJELzSM5j": "USDC",
+                "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v": "USDC",
+                "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB": "USDT",
+                "USD1ttGY1N17NEEHLmELoaybftRBUSErhqYiQzvEmuB": "USD1",
+                "USDrTxbzPBZgpRMsqKEQVxPUMwJHHkgYuHJDpKqnv6h": "USDC",
+            }
+            
+            # Well-known Solana tokens (use Binance price)
+            KNOWN_TOKENS = {
+                "JUPyiwrYJF1m4F2Xbh9Q56o6qg35jNMJwi17CZaYn94": "JUP",
+                "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So": "MSOL",
+                "7dHbWXmci3dT8UFYWYZweBLXgycu7Y3iL6trKn1Y68q8": "stSOL",
+                "bSo13r4TkiE4KumL71LsHTPpL2euBYLFx6h9HP3piy1": "bSOL",
+                "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263": "BONK",
+                "WENWENvqqNya429ubCdR81ZmD69brwQaaBYY6p3LCpk": "WEN",
+                "nosXBVoaCTtYdLvKY6Csb4AC8JCdQKKAaWYtx2ZMoo7": "NOS",
+            }
+            
             for item in result:
                 parsed_info = item.get("account", {}).get("data", {}).get("parsed", {}).get("info", {})
                 mint = parsed_info.get("mint")
                 token_amount = parsed_info.get("tokenAmount", {})
-                ui_amount = token_amount.get("uiAmount", 0.0)
+                ui_amount = token_amount.get("uiAmount") or 0.0
                 
-                # Check if it is a common token and balance is positive
-                SOL_COMMON_TOKENS = {
-                    "EPjFWdd5AufqSSjN7mvkyCeqMTJ5k91yZYJJELzSM5j": "USDC",
-                    "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB": "USDT",
-                    "JUPyiwrYJF1m4F2Xbh9Q56o6qg35jNMJwi17CZaYn94": "JUP",
-                    "HZ128J7hU2GAtu4YdJ884751z31Y15K4edC65W1RnaJQ": "PYTH",
-                    "jtoJsD2C2v1h7d3Y93ePpwVYQgx2H87iDG88A7tJGsV": "JTO"
-                }
-                if mint in SOL_COMMON_TOKENS and ui_amount > 0.0001:
-                    symbol = SOL_COMMON_TOKENS[mint]
+                if ui_amount <= 0:
+                    continue
+                    
+                if mint in STABLECOINS:
+                    symbol = STABLECOINS[mint]
+                    existing = tokens.get(symbol)
+                    if existing:
+                        tokens[symbol]["balance"] += ui_amount
+                    else:
+                        tokens[symbol] = {"balance": ui_amount, "price": 1.0}
+                    continue
+                    
+                if mint in KNOWN_TOKENS:
+                    symbol = KNOWN_TOKENS[mint]
                     p_feed = get_crypto_prices([symbol])
                     price = p_feed.get(symbol, 0.0)
-                    tokens[symbol] = {"balance": ui_amount, "price": price}
+                    val = ui_amount * price
+                    if val >= 1.0:
+                        if symbol in tokens:
+                            tokens[symbol]["balance"] += ui_amount
+                        else:
+                            tokens[symbol] = {"balance": ui_amount, "price": price}
+                    continue
+                    
+                # Try DexScreener for unknown tokens
+                try:
+                    ds_res = requests.get(
+                        f"https://api.dexscreener.com/latest/dex/tokens/{mint}",
+                        timeout=3
+                    )
+                    if ds_res.status_code == 200:
+                        pairs = (ds_res.json().get("pairs") or [])[:1]
+                        if pairs:
+                            symbol = pairs[0].get("baseToken", {}).get("symbol", "")
+                            price = float(pairs[0].get("priceUsd") or 0)
+                            val = ui_amount * price
+                            if symbol and val >= 1.0:
+                                if symbol in tokens:
+                                    tokens[symbol]["balance"] += ui_amount
+                                else:
+                                    tokens[symbol] = {"balance": ui_amount, "price": price}
+                except Exception:
+                    pass
+
     except Exception as e:
         print(f"Error fetching SPL tokens: {e}")
         
