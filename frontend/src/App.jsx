@@ -2232,7 +2232,7 @@ function App() {
                 onClick={() => setShowAddAccountModal(true)}
               >
                 <Plus size={16} />
-                <span className="btn-text">เพิ่มพอร์ต MT5</span>
+                <span className="btn-text">เพิ่มพอร์ตการลงทุน</span>
               </button>
             </div>
           </div>
@@ -3028,7 +3028,7 @@ function App() {
                   else setSelectedAccountId('');
                 }}>
                   <BookOpen size={18} />
-                  <span className="sidebar-item-text">🇹🇭 พอร์ตหุ้นไทย (Stock)</span>
+                  <span className="sidebar-item-text">🇹🇭 พอร์ตหุ้นไทย/ตปท. (Stock)</span>
                 </button>
                 <button className={`sidebar-item ${activeTab === 'crypto' ? 'active' : ''}`} onClick={() => {
                   setActiveTab('crypto');
