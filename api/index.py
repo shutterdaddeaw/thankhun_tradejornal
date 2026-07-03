@@ -1,3 +1,4 @@
+# Trigger Vercel Auto-Deployment after environment variable setup
 import os
 import sys
 
