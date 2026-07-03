@@ -573,6 +573,7 @@ function App() {
         setStockPrice('');
         setStockReason('');
         await loadStockData(selectedAccountId);
+        await loadAccounts();
         alert("บันทึกธุรกรรมซื้อขายหุ้นสำเร็จแล้ว");
       } else {
         const err = await res.json();
@@ -595,6 +596,7 @@ function App() {
       });
       if (res.ok) {
         await loadStockData(selectedAccountId);
+        await loadAccounts();
         alert("อัปเดตยอดเงินสดสำเร็จแล้ว");
       }
     } catch (err) {
@@ -619,6 +621,7 @@ function App() {
         setCryptoBalance('');
         setCryptoAvgPrice('');
         await loadCryptoData(selectedAccountId);
+        await loadAccounts();
         alert("เพิ่มเหรียญในพอร์ตสำเร็จแล้ว");
       } else {
         const err = await res.json();
@@ -638,6 +641,7 @@ function App() {
       });
       if (res.ok) {
         await loadStockData(selectedAccountId);
+        await loadAccounts();
       }
     } catch (err) {
       console.error(err);
@@ -653,6 +657,7 @@ function App() {
       });
       if (res.ok) {
         await loadCryptoData(selectedAccountId);
+        await loadAccounts();
       }
     } catch (err) {
       console.error(err);
@@ -668,6 +673,7 @@ function App() {
       });
       if (res.ok) {
         await loadCryptoData(selectedAccountId);
+        await loadAccounts();
       }
     } catch (err) {
       console.error(err);
@@ -679,7 +685,9 @@ function App() {
   const handleAccountSelect = (accountId) => {
     setSelectedAccountId(accountId);
     if (accountId === 'all') {
-      setActiveTab('networth');
+      if (activeTab !== 'forex') {
+        setActiveTab('networth');
+      }
       loadAllAccountsCombinedData(accounts);
     } else {
       const activeAcc = accounts.find(a => a.id.toString() === accountId);
@@ -715,7 +723,9 @@ function App() {
           const targetId = exists ? selectedAccountId : 'all';
           setSelectedAccountId(targetId);
           if (targetId === 'all') {
-            setActiveTab('networth');
+            if (activeTab !== 'forex') {
+              setActiveTab('networth');
+            }
             loadAllAccountsCombinedData(data);
           } else {
             const selectedAcc = data.find(a => a.id.toString() === targetId);
@@ -2144,18 +2154,45 @@ function App() {
                 className="account-select" 
                 value={selectedAccountId} 
                 onChange={(e) => {
-                  setSelectedAccountId(e.target.value);
-                  loadAccountData(e.target.value);
+                  const val = e.target.value;
+                  setSelectedAccountId(val);
+                  if (val === 'all') {
+                    if (activeTab !== 'forex') {
+                      setActiveTab('networth');
+                    }
+                    loadAllAccountsCombinedData(accounts);
+                  } else {
+                    const selectedAcc = accounts.find(a => a.id.toString() === val);
+                    if (selectedAcc) {
+                      if (selectedAcc.account_type === 'stock') {
+                        loadStockData(val);
+                      } else if (selectedAcc.account_type === 'crypto') {
+                        loadCryptoData(val);
+                      } else {
+                        loadAccountData(val);
+                      }
+                    }
+                  }
                 }}
               >
-                {accounts.length > 0 && (
+                {accounts.length > 0 && activeTab === 'networth' && (
                   <option value="all">📊 สรุปรวมทุกพอร์ต (All Portfolios)</option>
                 )}
-                {accounts.map(acc => (
-                  <option key={acc.id} value={acc.id}>
-                    {acc.account_name} ({acc.broker_name})
-                  </option>
-                ))}
+                {accounts.length > 0 && activeTab === 'forex' && (
+                  <option value="all">📊 สรุปรวมทุกพอร์ต (All Forex Portfolios)</option>
+                )}
+                {accounts
+                  .filter(acc => {
+                    if (activeTab === 'forex') return !acc.account_type || acc.account_type === 'forex';
+                    if (activeTab === 'stock') return acc.account_type === 'stock';
+                    if (activeTab === 'crypto') return acc.account_type === 'crypto';
+                    return true;
+                  })
+                  .map(acc => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.account_name} ({acc.broker_name})
+                    </option>
+                  ))}
                 {accounts.length === 0 && <option value="">ไม่มีบัญชีเชื่อมต่อ</option>}
               </select>
 
@@ -3022,9 +3059,8 @@ function App() {
                 </button>
                 <button className={`sidebar-item ${activeTab === 'forex' ? 'active' : ''}`} onClick={() => {
                   setActiveTab('forex');
-                  const firstForex = accounts.find(a => !a.account_type || a.account_type === 'forex');
-                  if (firstForex) handleAccountSelect(firstForex.id.toString());
-                  else setSelectedAccountId('all');
+                  setSelectedAccountId('all');
+                  loadAllAccountsCombinedData(accounts);
                 }}>
                   <Activity size={18} />
                   <span className="sidebar-item-text">📈 พอร์ต Forex (MT5)</span>

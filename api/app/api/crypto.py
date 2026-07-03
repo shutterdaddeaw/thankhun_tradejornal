@@ -184,12 +184,54 @@ def delete_holding(
 def fetch_evm_balances(address: str) -> dict:
     tokens = {}
     
-    # Blockscout URLs for main networks
+    # Blockscout URLs for main networks (excluding Linea/BSC to bypass Cloudflare and 404s)
     networks = [
         {"base": "https://eth.blockscout.com/api/v2", "coin": "ETH"},
-        {"base": "https://bsc.blockscout.com/api/v2", "coin": "BNB"},
-        {"base": "https://base.blockscout.com/api/v2", "coin": "ETH"}
+        {"base": "https://base.blockscout.com/api/v2", "coin": "ETH"},
+        {"base": "https://polygon.blockscout.com/api/v2", "coin": "POL"},
+        {"base": "https://arbitrum.blockscout.com/api/v2", "coin": "ETH"},
+        {"base": "https://optimism.blockscout.com/api/v2", "coin": "ETH"}
     ]
+    
+    # Direct Linea RPC native ETH check
+    try:
+        rpc_url = "https://rpc.linea.build"
+        payload = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "eth_getBalance",
+            "params": [address, "latest"]
+        }
+        res = requests.post(rpc_url, json=payload, timeout=4)
+        if res.status_code == 200:
+            result = res.json().get("result")
+            if result:
+                wei_val = int(result, 16)
+                eth_val = wei_val / 1e18
+                if eth_val > 0.0001:
+                    tokens["ETH"] = {"balance": eth_val, "price": 0.0}
+    except Exception as e:
+        print(f"Error fetching Linea RPC: {e}")
+        
+    # Direct BSC RPC native BNB check
+    try:
+        bsc_rpc_url = "https://bsc-dataseed.binance.org"
+        payload = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "eth_getBalance",
+            "params": [address, "latest"]
+        }
+        res = requests.post(bsc_rpc_url, json=payload, timeout=4)
+        if res.status_code == 200:
+            result = res.json().get("result")
+            if result:
+                wei_val = int(result, 16)
+                bnb_val = wei_val / 1e18
+                if bnb_val > 0.0001:
+                    tokens["BNB"] = {"balance": bnb_val, "price": 0.0}
+    except Exception as e:
+        print(f"Error fetching BSC RPC: {e}")
     
     headers = {"User-Agent": "Mozilla/5.0"}
     for net in networks:
@@ -282,6 +324,7 @@ def sync_prices(
         existing_symbols = {h.symbol: h for h in existing_holdings}
         
         # Upsert scanned tokens
+        saved_symbols = set()
         for symbol, info in tokens.items():
             bal = info["balance"]
             price = info["price"]
@@ -292,6 +335,12 @@ def sync_prices(
                 price = p_feed.get(symbol, 0.0)
                 
             val_usd = bal * price
+            
+            # Filter out spam/low-value tokens (under $1 value)
+            if val_usd < 1.0:
+                continue
+                
+            saved_symbols.add(symbol)
             
             if symbol in existing_symbols:
                 holding = existing_symbols[symbol]
@@ -309,10 +358,9 @@ def sync_prices(
                 )
                 db.add(holding)
                 
-        # Remove any tokens that are in DB but no longer present in scanned wallet (balance is now 0)
-        scanned_symbols = set(tokens.keys())
+        # Remove any tokens that are in DB but no longer present, or are worth less than $1
         for symbol, holding in existing_symbols.items():
-            if symbol not in scanned_symbols:
+            if symbol not in saved_symbols:
                 db.delete(holding)
     else:
         # Regular manual sync: update prices for existing holdings
