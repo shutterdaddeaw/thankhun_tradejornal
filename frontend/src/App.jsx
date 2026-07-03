@@ -3093,7 +3093,7 @@ function App() {
                   setNewAccBroker(e.target.value === 'stock' ? 'SET' : e.target.value === 'crypto' ? 'Binance' : '');
                 }}>
                   <option value="forex"> Forex (MT5 EA Connection)</option>
-                  <option value="stock">🇹🇭 หุ้นไทย (Thailand Stocks)</option>
+                  <option value="stock">🇹🇭 พอร์ตหุ้นไทย/ตปท. (Stock)</option>
                   <option value="crypto">🪙 คริปโตเคอเรนซี (Crypto Wallet / Exchange)</option>
                 </select>
               </div>
