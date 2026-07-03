@@ -35,12 +35,13 @@ def create_account(
         user_id=current_user.id,
         account_number=account_in.account_number,
         broker_name=account_in.broker_name,
-        server_name=account_in.server_name,
+        server_name=account_in.server_name or "",
         account_name=account_in.account_name,
         currency=account_in.currency,
+        account_type=account_in.account_type or "forex",
         leverage=account_in.leverage,
         connection_type=account_in.connection_type,
-        status="pending_verify"
+        status="active_account_sync" if (account_in.account_type in ("stock", "crypto")) else "pending_verify"
     )
     db.add(db_account)
     db.commit()

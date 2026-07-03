@@ -26,7 +26,8 @@ import {
   Settings,
   ArrowUpRight,
   Wallet,
-  Edit
+  Edit,
+  Trash2
 } from 'lucide-react';
 import { 
   ResponsiveContainer, 
@@ -35,7 +36,10 @@ import {
   XAxis, 
   YAxis, 
   Tooltip, 
-  CartesianGrid 
+  CartesianGrid,
+  PieChart,
+  Pie,
+  Cell
 } from 'recharts';
 
 const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
@@ -86,6 +90,33 @@ function App() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [datePreset, setDatePreset] = useState('all');
+
+  // Sidebar Navigation & Layout
+  const [activeTab, setActiveTab] = useState('networth'); // networth, forex, stock, crypto
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  
+  // Stock Portfolio States
+  const [stockHoldings, setStockHoldings] = useState([]);
+  const [stockTrades, setStockTrades] = useState([]);
+  const [stockCash, setStockCash] = useState(0);
+  const [selectedStock, setSelectedStock] = useState(null);
+  const [stockCandles, setStockCandles] = useState([]);
+  
+  // Crypto Portfolio States
+  const [cryptoHoldings, setCryptoHoldings] = useState([]);
+  
+  // Form states for manual additions
+  const [newAccType, setNewAccType] = useState('forex'); // forex, stock, crypto
+  const [stockSymbol, setStockSymbol] = useState('');
+  const [stockAction, setStockAction] = useState('BUY');
+  const [stockVolume, setStockVolume] = useState('');
+  const [stockPrice, setStockPrice] = useState('');
+  const [stockReason, setStockReason] = useState('');
+  const [editStockCashValue, setEditStockCashValue] = useState('');
+  
+  const [cryptoSymbol, setCryptoSymbol] = useState('');
+  const [cryptoBalance, setCryptoBalance] = useState('');
+  const [cryptoAvgPrice, setCryptoAvgPrice] = useState('');
 
   // Modals
   const [showAddAccountModal, setShowAddAccountModal] = useState(false);
@@ -466,6 +497,207 @@ function App() {
     }
   };
 
+  const loadStockData = async (accountId) => {
+    setIsSyncing(true);
+    try {
+      const holdingsRes = await fetch(`${API_BASE_URL}/v1/stock/accounts/${accountId}/holdings`, { headers: getHeaders() });
+      if (holdingsRes.ok) {
+        const holdingsData = await holdingsRes.json();
+        setStockHoldings(holdingsData);
+      }
+      const tradesRes = await fetch(`${API_BASE_URL}/v1/stock/accounts/${accountId}/trades`, { headers: getHeaders() });
+      if (tradesRes.ok) {
+        const tradesData = await tradesRes.json();
+        setStockTrades(tradesData);
+      }
+      const cashRes = await fetch(`${API_BASE_URL}/v1/stock/accounts/${accountId}/cash`, { headers: getHeaders() });
+      if (cashRes.ok) {
+        const cashData = await cashRes.json();
+        setStockCash(cashData.cash_balance);
+        setEditStockCashValue(cashData.cash_balance.toString());
+      }
+    } catch (err) {
+      console.error("Failed to load stock data:", err);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const loadCryptoData = async (accountId) => {
+    setIsSyncing(true);
+    try {
+      const holdingsRes = await fetch(`${API_BASE_URL}/v1/crypto/accounts/${accountId}/holdings`, { headers: getHeaders() });
+      if (holdingsRes.ok) {
+        const holdingsData = await holdingsRes.json();
+        setCryptoHoldings(holdingsData);
+      }
+    } catch (err) {
+      console.error("Failed to load crypto data:", err);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const loadStockCandles = async (symbol) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/v1/stock/candles/${symbol}`, { headers: getHeaders() });
+      if (res.ok) {
+        const data = await res.json();
+        setStockCandles(data);
+        setSelectedStock(symbol);
+      } else {
+        alert("ไม่สามารถดึงข้อมูลกราฟเทคนิคสำหรับหุ้นตัวนี้ได้");
+      }
+    } catch (err) {
+      console.error("Failed to load stock candles:", err);
+    }
+  };
+
+  const handleAddStockTrade = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch(`${API_BASE_URL}/v1/stock/accounts/${selectedAccountId}/trades`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({
+          symbol: stockSymbol,
+          action: stockAction,
+          volume: parseInt(stockVolume),
+          price: parseFloat(stockPrice),
+          reason: stockReason
+        })
+      });
+      if (res.ok) {
+        setStockSymbol('');
+        setStockVolume('');
+        setStockPrice('');
+        setStockReason('');
+        await loadStockData(selectedAccountId);
+        alert("บันทึกธุรกรรมซื้อขายหุ้นสำเร็จแล้ว");
+      } else {
+        const err = await res.json();
+        alert(err.detail || "บันทึกออเดอร์ล้มเหลว");
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleUpdateStockCash = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch(`${API_BASE_URL}/v1/stock/accounts/${selectedAccountId}/cash`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({
+          cash_balance: parseFloat(editStockCashValue)
+        })
+      });
+      if (res.ok) {
+        await loadStockData(selectedAccountId);
+        alert("อัปเดตยอดเงินสดสำเร็จแล้ว");
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleAddCryptoHolding = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch(`${API_BASE_URL}/v1/crypto/accounts/${selectedAccountId}/holdings`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({
+          symbol: cryptoSymbol,
+          balance: parseFloat(cryptoBalance),
+          avg_purchase_price: cryptoAvgPrice ? parseFloat(cryptoAvgPrice) : null
+        })
+      });
+      if (res.ok) {
+        setCryptoSymbol('');
+        setCryptoBalance('');
+        setCryptoAvgPrice('');
+        await loadCryptoData(selectedAccountId);
+        alert("เพิ่มเหรียญในพอร์ตสำเร็จแล้ว");
+      } else {
+        const err = await res.json();
+        alert(err.detail || "การเพิ่มเหรียญล้มเหลว");
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeleteStockHolding = async (holdingId) => {
+    if (!window.confirm("คุณแน่ใจว่าต้องการลบหุ้นตัวนี้ออกจากพอร์ต?")) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/v1/stock/accounts/${selectedAccountId}/holdings/${holdingId}`, {
+        method: 'DELETE',
+        headers: getHeaders()
+      });
+      if (res.ok) {
+        await loadStockData(selectedAccountId);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeleteCryptoHolding = async (holdingId) => {
+    if (!window.confirm("คุณแน่ใจว่าต้องการลบเหรียญนี้ออกจากพอร์ต?")) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/v1/crypto/accounts/${selectedAccountId}/holdings/${holdingId}`, {
+        method: 'DELETE',
+        headers: getHeaders()
+      });
+      if (res.ok) {
+        await loadCryptoData(selectedAccountId);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleSyncCryptoPrices = async () => {
+    setIsSyncing(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/v1/crypto/accounts/${selectedAccountId}/sync`, {
+        method: 'POST',
+        headers: getHeaders()
+      });
+      if (res.ok) {
+        await loadCryptoData(selectedAccountId);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleAccountSelect = (accountId) => {
+    setSelectedAccountId(accountId);
+    if (accountId === 'all') {
+      setActiveTab('networth');
+      loadAllAccountsCombinedData(accounts);
+    } else {
+      const activeAcc = accounts.find(a => a.id.toString() === accountId);
+      if (activeAcc) {
+        if (activeAcc.account_type === 'stock') {
+          setActiveTab('stock');
+          loadStockData(accountId);
+        } else if (activeAcc.account_type === 'crypto') {
+          setActiveTab('crypto');
+          loadCryptoData(accountId);
+        } else {
+          setActiveTab('forex');
+          loadAccountData(accountId);
+        }
+      }
+    }
+  };
+
   const loadAccounts = async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/v1/accounts/`, {
@@ -479,14 +711,26 @@ function App() {
         const data = await res.json();
         setAccounts(data);
         if (data.length > 0) {
-          // Keep current selection or default to 'all' if there are portfolios
           const exists = data.find(a => a.id.toString() === selectedAccountId) || selectedAccountId === 'all';
           const targetId = exists ? selectedAccountId : 'all';
           setSelectedAccountId(targetId);
           if (targetId === 'all') {
+            setActiveTab('networth');
             loadAllAccountsCombinedData(data);
           } else {
-            loadAccountData(targetId);
+            const selectedAcc = data.find(a => a.id.toString() === targetId);
+            if (selectedAcc) {
+              if (selectedAcc.account_type === 'stock') {
+                setActiveTab('stock');
+                loadStockData(targetId);
+              } else if (selectedAcc.account_type === 'crypto') {
+                setActiveTab('crypto');
+                loadCryptoData(targetId);
+              } else {
+                setActiveTab('forex');
+                loadAccountData(targetId);
+              }
+            }
           }
         } else {
           setSelectedAccountId('');
@@ -883,10 +1127,11 @@ function App() {
         body: JSON.stringify({
           account_number: newAccNumber,
           broker_name: newAccBroker,
-          server_name: newAccServer,
+          server_name: newAccServer || "",
           account_name: newAccName,
           currency: newAccCurrency,
-          leverage: parseInt(newAccLeverage),
+          account_type: newAccType,
+          leverage: parseInt(newAccLeverage) || 100,
           connection_type: newAccConnType,
           investor_password: newAccPassword || null
         })
@@ -902,9 +1147,13 @@ function App() {
         setNewAccName('');
         setNewAccPassword('');
         
-        // Show guide modal with token
-        setActiveGuideToken(data.publisher_token);
-        setShowGuideModal(true);
+        // Show guide modal only for Forex (MT5)
+        if (newAccType === 'forex') {
+          setActiveGuideToken(data.publisher_token);
+          setShowGuideModal(true);
+        } else {
+          alert(`เพิ่มพอร์ต ${newAccType === 'stock' ? 'หุ้นไทย' : 'คริปโต'} สำเร็จเรียบร้อยแล้ว`);
+        }
         
         // Refresh
         await loadAccounts();
@@ -1427,38 +1676,465 @@ function App() {
     );
   }
 
-  // Dashboard & Public Share Views
-  return (
-    <div className="dashboard-layout">
-      {/* Navigation */}
-      <nav className="navbar">
-        <a href="/" className="nav-brand">Thankhun<span> trade Jornal</span></a>
-        
-        {page !== 'public' ? (
-          <div className="nav-actions">
-            <div className="nav-user">
-              <User size={16} />
-              <span className="nav-user-text">{user?.full_name}</span>
+  const renderNetWorthTab = () => {
+    const forexAccs = accounts.filter(a => !a.account_type || a.account_type === 'forex');
+    const stockAccs = accounts.filter(a => a.account_type === 'stock');
+    const cryptoAccs = accounts.filter(a => a.account_type === 'crypto');
+    
+    const forexTotal = forexAccs.reduce((sum, a) => sum + (isCentCurrency(a.currency) ? a.equity / 100 : a.equity), 0);
+    const stockTotal = stockAccs.reduce((sum, a) => sum + a.equity, 0);
+    const cryptoTotal = cryptoAccs.reduce((sum, a) => sum + a.equity, 0);
+    
+    const donutData = [
+      { name: 'Forex (USD equivalent)', value: forexTotal, color: 'var(--accent-primary)' },
+      { name: 'Stocks (converted to USD 1:35)', value: stockTotal / 35.0, color: 'var(--accent-secondary)' },
+      { name: 'Crypto (USD)', value: cryptoTotal, color: '#10b981' }
+    ].filter(d => d.value > 0);
+
+    const totalNetWorthUSD = forexTotal + (stockTotal / 35.0) + cryptoTotal;
+
+    return (
+      <div className="networth-dashboard">
+        <div className="stats-grid">
+          <div className="stat-card stat-card-featured">
+            <div className="stat-title">💰 รวมสินทรัพย์สุทธิ (Total Net Worth ~USD)</div>
+            <div className="stat-value">
+              {hideBalances ? '••••' : `$${totalNetWorthUSD.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
             </div>
-            <button className="btn-secondary" style={{ marginRight: '8px', padding: '8px 14px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px', width: 'auto' }} onClick={() => { setShowSettingsModal(true); fetchBackupStatus(); }}>
-              <Cpu size={14} style={{ color: 'var(--accent-secondary)' }} />
-              <span className="nav-btn-text">ตั้งค่าระบบ AI</span>
-            </button>
-            <button className="btn-logout" onClick={handleLogout}>
-              <LogOut size={16} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
-              <span className="nav-btn-text">ออกจากระบบ</span>
-            </button>
+            <div className="stat-desc">ประมาณการรวมสกุลเงิน (คำนวณอัตราแลกเปลี่ยน 1 USD = 35 THB)</div>
           </div>
-        ) : (
-          <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', fontWeight: '500' }}>
-            <Eye size={16} style={{ marginRight: '6px', verticalAlign: 'middle', color: 'var(--accent-secondary)' }} />
-            Public View Portfolio
+          
+          <div className="stat-card">
+            <div className="stat-title" style={{ color: 'var(--accent-primary)' }}>📈 Forex Portfolio</div>
+            <div className="stat-value">
+              {hideBalances ? '••••' : `$${forexTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+            </div>
+            <div className="stat-desc">{forexAccs.length} พอร์ตเทรด MT5</div>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-title" style={{ color: 'var(--accent-secondary)' }}>🇹🇭 Thai Stocks Portfolio</div>
+            <div className="stat-value">
+              {hideBalances ? '••••' : `${stockTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })} THB`}
+            </div>
+            <div className="stat-desc">{stockAccs.length} บัญชีหุ้นไทย</div>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-title" style={{ color: '#10b981' }}>🪙 Crypto Assets Portfolio</div>
+            <div className="stat-value">
+              {hideBalances ? '••••' : `$${cryptoTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+            </div>
+            <div className="stat-desc">{cryptoAccs.length} ที่อยู่กระเป๋า / Exchange</div>
+          </div>
+        </div>
+
+        <div className="combined-summary-grid">
+          <div className="section-box" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+            <div className="section-title" style={{ width: '100%' }}>📊 สัดส่วนพอร์ตการลงทุน (Asset Allocation ~USD)</div>
+            {donutData.length > 0 ? (
+              <div style={{ width: '100%', height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={donutData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {donutData.map((entry, idx) => (
+                        <Cell key={`cell-${idx}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value) => `$${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div style={{ padding: '40px', color: 'var(--text-muted)' }}>ไม่มีข้อมูลแสดงสัดส่วน</div>
+            )}
+            <div style={{ display: 'flex', gap: '16px', marginTop: '12px', flexWrap: 'wrap', justifyContent: 'center' }}>
+              {donutData.map((d, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem' }}>
+                  <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: d.color }} />
+                  <span>{d.name}: {((d.value / (totalNetWorthUSD || 1)) * 100).toFixed(0)}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="section-box">
+            <div className="section-title">💼 พอร์ตการลงทุนทั้งหมด (All Portfolios)</div>
+            <div className="table-wrapper">
+              <table className="custom-table">
+                <thead>
+                  <tr>
+                    <th>ชื่อพอร์ต (Friendly Name)</th>
+                    <th>ประเภทสินทรัพย์</th>
+                    <th>โบรกเกอร์ / แพลตฟอร์ม</th>
+                    <th style={{ textAlign: 'right' }}>มูลค่าสุทธิ (Balance)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {accounts.map(acc => (
+                    <tr key={acc.id}>
+                      <td style={{ fontWeight: '600' }}>{acc.account_name}</td>
+                      <td>
+                        <span className={`badge ${acc.account_type === 'stock' ? 'badge-success' : acc.account_type === 'crypto' ? 'badge-secondary' : 'badge-info'}`} style={{ textTransform: 'uppercase', fontSize: '0.75rem' }}>
+                          {acc.account_type || 'Forex'}
+                        </span>
+                      </td>
+                      <td>{acc.broker_name}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--accent-secondary)' }}>
+                        {hideBalances ? '••••' : `${(isCentCurrency(acc.currency) ? acc.equity / 100 : acc.equity).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${acc.currency}`}
+                      </td>
+                    </tr>
+                  ))}
+                  {accounts.length === 0 && (
+                    <tr>
+                      <td colSpan={4} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>ไม่มีพอร์ตการลงทุนในระบบ</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderStockTab = () => {
+    const activeAcc = accounts.find(a => a.id.toString() === selectedAccountId);
+    if (!activeAcc || activeAcc.account_type !== 'stock') {
+      return (
+        <div className="section-box" style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <BookOpen size={48} style={{ color: 'var(--text-muted)', marginBottom: '20px' }} />
+          <h3 style={{ fontSize: '1.4rem', marginBottom: '8px' }}>กรุณาเลือกหรือเพิ่มพอร์ตหุ้นไทย</h3>
+          <p style={{ color: 'var(--text-secondary)', maxWidth: '500px', margin: '0 auto 30px auto' }}>
+            เลือกพอร์ตหุ้นไทยจากรายการด้านบน หรือกดปุ่ม "เพิ่มพอร์ตการลงทุน" เพื่อสร้างพอร์ตใหม่
+          </p>
+        </div>
+      );
+    }
+
+    const stockHoldingsValue = stockHoldings.reduce((sum, h) => sum + (h.volume * h.current_price), 0);
+    const totalAccountValue = stockHoldingsValue + stockCash;
+    const totalUnrealizedPnL = stockHoldings.reduce((sum, h) => sum + h.pnl, 0);
+
+    return (
+      <div className="stock-dashboard">
+        <div className="stats-grid">
+          <div className="stat-card stat-card-featured">
+            <div className="stat-title">💼 มูลค่าพอร์ตหุ้นทั้งหมด (Total Value)</div>
+            <div className="stat-value">
+              {hideBalances ? '••••' : `${totalAccountValue.toLocaleString(undefined, { minimumFractionDigits: 2 })} THB`}
+            </div>
+            <div className="stat-desc">เงินสด + มูลค่าหุ้นที่ถือครอง</div>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-title">💵 เงินสดคงเหลือ (Cash Balance)</div>
+            <div className="stat-value">
+              {hideBalances ? '••••' : `${stockCash.toLocaleString(undefined, { minimumFractionDigits: 2 })} THB`}
+            </div>
+            <form onSubmit={handleUpdateStockCash} style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+              <input 
+                type="number" 
+                step="0.01"
+                className="form-input" 
+                style={{ padding: '4px 8px', fontSize: '0.8rem', height: '28px' }} 
+                value={editStockCashValue} 
+                onChange={(e) => setEditStockCashValue(e.target.value)} 
+              />
+              <button type="submit" className="btn-secondary" style={{ padding: '0 8px', height: '28px', fontSize: '0.8rem', width: 'auto' }}>อัปเดต</button>
+            </form>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-title">📈 มูลค่าหุ้นถือครอง (Market Value)</div>
+            <div className="stat-value">
+              {hideBalances ? '••••' : `${stockHoldingsValue.toLocaleString(undefined, { minimumFractionDigits: 2 })} THB`}
+            </div>
+            <div className="stat-desc">ราคาล่าสุดอิงตลาดหลักทรัพย์ (SET)</div>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-title">🟢 กำไรที่ยังไม่เกิดขึ้น (Unrealized PnL)</div>
+            <div className="stat-value" style={{ color: totalUnrealizedPnL >= 0 ? 'var(--success)' : 'var(--error)' }}>
+              {hideBalances ? '••••' : `${totalUnrealizedPnL >= 0 ? '+' : ''}${totalUnrealizedPnL.toLocaleString(undefined, { minimumFractionDigits: 2 })} THB`}
+            </div>
+            <div className="stat-desc">กำไร/ขาดทุนทางบัญชีล่าสุด</div>
+          </div>
+        </div>
+
+        {selectedStock && stockCandles.length > 0 && (
+          <div className="candle-chart-container">
+            <div className="chart-header">
+              <div className="chart-title">
+                <TrendingUp size={18} style={{ color: 'var(--accent-secondary)' }} />
+                <span>กราฟราคา 6 เดือนย้อนหลัง: {selectedStock} (Yahoo Finance)</span>
+              </div>
+              <button className="btn-secondary" style={{ padding: '4px 10px', fontSize: '0.8rem', width: 'auto' }} onClick={() => setSelectedStock(null)}>ปิดกราฟ</button>
+            </div>
+            <div style={{ width: '100%', height: 260 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={stockCandles}>
+                  <defs>
+                    <linearGradient id="colorStock" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="var(--accent-secondary)" stopOpacity={0.2}/>
+                      <stop offset="95%" stopColor="var(--accent-secondary)" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                  <XAxis dataKey="date" stroke="var(--text-muted)" fontSize={11} tickLine={false} />
+                  <YAxis domain={['auto', 'auto']} stroke="var(--text-muted)" fontSize={11} tickLine={false} />
+                  <Tooltip 
+                    contentStyle={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-color)', borderRadius: '8px' }}
+                    labelStyle={{ color: '#fff', fontWeight: '600' }}
+                  />
+                  <Area type="monotone" dataKey="close" stroke="var(--accent-secondary)" strokeWidth={2} fillOpacity={1} fill="url(#colorStock)" name="Close Price" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         )}
-      </nav>
 
-      {/* Main Container */}
-      <div className="dashboard-container">
+        <div className="sections-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
+          <div className="section-box">
+            <div className="section-title">📊 รายการหุ้นในพอร์ต (Holdings)</div>
+            <div className="table-wrapper">
+              <table className="custom-table">
+                <thead>
+                  <tr>
+                    <th>หุ้น</th>
+                    <th style={{ textAlign: 'right' }}>จำนวน</th>
+                    <th style={{ textAlign: 'right' }}>ทุนเฉลี่ย</th>
+                    <th style={{ textAlign: 'right' }}>ราคาตลาด</th>
+                    <th style={{ textAlign: 'right' }}>PnL</th>
+                    <th>ลบ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stockHoldings.map(h => (
+                    <tr key={h.id}>
+                      <td style={{ fontWeight: '600', color: 'var(--accent-secondary)', cursor: 'pointer' }} onClick={() => loadStockCandles(h.symbol)}>
+                        🔍 {h.symbol}
+                      </td>
+                      <td style={{ textAlign: 'right' }}>{h.volume.toLocaleString()}</td>
+                      <td style={{ textAlign: 'right' }}>{h.avg_price.toFixed(2)}</td>
+                      <td style={{ textAlign: 'right' }}>{h.current_price.toFixed(2)}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 'bold', color: h.pnl >= 0 ? 'var(--success)' : 'var(--error)' }}>
+                        {h.pnl >= 0 ? '+' : ''}{h.pnl.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td>
+                        <button className="btn-logout" onClick={() => handleDeleteStockHolding(h.id)} style={{ padding: '6px' }}>
+                          <Trash2 size={12} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {stockHoldings.length === 0 && (
+                    <tr>
+                      <td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>ไม่มีรายการหุ้นในพอร์ต</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="section-box">
+            <div className="section-title">✍️ บันทึกธุรกรรม (Log Trade)</div>
+            <form onSubmit={handleAddStockTrade} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div className="form-group">
+                <label className="form-label">ชื่อหุ้น (Symbol เช่น PTT)</label>
+                <input type="text" className="form-input" required value={stockSymbol} onChange={(e) => setStockSymbol(e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">ประเภท</label>
+                <select className="form-input" value={stockAction} onChange={(e) => setStockAction(e.target.value)}>
+                  <option value="BUY">ซื้อ (BUY)</option>
+                  <option value="SELL">ขาย (SELL)</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">จำนวนหุ้น</label>
+                <input type="number" className="form-input" required value={stockVolume} onChange={(e) => setStockVolume(e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">ราคาต่อหุ้น</label>
+                <input type="number" step="0.01" className="form-input" required value={stockPrice} onChange={(e) => setStockPrice(e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">หมายเหตุ</label>
+                <input type="text" className="form-input" value={stockReason} onChange={(e) => setStockReason(e.target.value)} />
+              </div>
+              <button type="submit" className="btn-primary" style={{ marginTop: '8px' }}>บันทึกรายการ</button>
+            </form>
+          </div>
+        </div>
+
+        <div className="section-box" style={{ marginTop: '24px' }}>
+          <div className="section-title">📜 ประวัติธุรกรรมการซื้อขายหุ้น (Stock Trade Logs)</div>
+          <div className="table-wrapper">
+            <table className="custom-table">
+              <thead>
+                <tr>
+                  <th>วันเวลา</th>
+                  <th>หุ้น</th>
+                  <th>ธุรกรรม</th>
+                  <th style={{ textAlign: 'right' }}>จำนวน</th>
+                  <th style={{ textAlign: 'right' }}>ราคาซื้อขาย</th>
+                  <th style={{ textAlign: 'right' }}>มูลค่ารวม</th>
+                  <th style={{ textAlign: 'right' }}>Realized PnL</th>
+                  <th>หมายเหตุ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stockTrades.map(t => (
+                  <tr key={t.id}>
+                    <td>{new Date(t.date).toLocaleString('th-TH')}</td>
+                    <td style={{ fontWeight: '600' }}>{t.symbol}</td>
+                    <td>
+                      <span className={`badge ${t.action === 'BUY' ? 'badge-info' : 'badge-success'}`}>
+                        {t.action === 'BUY' ? 'ซื้อ' : 'ขาย'}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: 'right' }}>{t.volume.toLocaleString()}</td>
+                    <td style={{ textAlign: 'right' }}>{t.price.toFixed(2)}</td>
+                    <td style={{ textAlign: 'right' }}>{(t.volume * t.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 'bold', color: t.realized_pnl > 0 ? 'var(--success)' : t.realized_pnl < 0 ? 'var(--error)' : 'inherit' }}>
+                      {t.realized_pnl !== 0 ? `${t.realized_pnl > 0 ? '+' : ''}${t.realized_pnl.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '-'}
+                    </td>
+                    <td>{t.reason || '-'}</td>
+                  </tr>
+                ))}
+                {stockTrades.length === 0 && (
+                  <tr>
+                    <td colSpan={8} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>ไม่มีประวัติการทำรายการ</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderCryptoTab = () => {
+    const activeAcc = accounts.find(a => a.id.toString() === selectedAccountId);
+    if (!activeAcc || activeAcc.account_type !== 'crypto') {
+      return (
+        <div className="section-box" style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <Wallet size={48} style={{ color: 'var(--text-muted)', marginBottom: '20px' }} />
+          <h3 style={{ fontSize: '1.4rem', marginBottom: '8px' }}>กรุณาเลือกหรือเพิ่มพอร์ตคริปโต</h3>
+          <p style={{ color: 'var(--text-secondary)', maxWidth: '500px', margin: '0 auto 30px auto' }}>
+            เลือกพอร์ตคริปโตจากรายการด้านบน หรือกดปุ่ม "เพิ่มพอร์ตการลงทุน" เพื่อสร้างกระเป๋าใหม่
+          </p>
+        </div>
+      );
+    }
+
+    const cryptoTotalValue = cryptoHoldings.reduce((sum, h) => sum + h.value_usd, 0);
+
+    return (
+      <div className="crypto-dashboard">
+        <div className="stats-grid">
+          <div className="stat-card stat-card-featured">
+            <div className="stat-title">💰 มูลค่าพอร์ตเหรียญรวม (Total Value)</div>
+            <div className="stat-value">
+              {hideBalances ? '••••' : `$${cryptoTotalValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+            </div>
+            <div className="stat-desc">เงินลงทุนรวมดอลลาร์สหรัฐ (USD)</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-title">🔗 ที่อยู่กระเป๋า / Exchange</div>
+            <div className="stat-value" style={{ fontSize: '1.1rem', wordBreak: 'break-all' }}>
+              {activeAcc.account_number}
+            </div>
+            <div className="stat-desc">แพลตฟอร์มหลัก: {activeAcc.broker_name}</div>
+          </div>
+        </div>
+
+        <div className="sections-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
+          <div className="section-box">
+            <div className="section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>📊 พอร์ตเหรียญดิจิทัล (Holdings)</span>
+              <button className="btn-secondary" style={{ padding: '6px 14px', display: 'flex', alignItems: 'center', gap: '6px', width: 'auto' }} onClick={handleSyncCryptoPrices} disabled={isSyncing}>
+                <RefreshCw size={12} className={isSyncing ? 'spin-anim' : ''} />
+                อัปเดตราคาตลาด
+              </button>
+            </div>
+            <div className="table-wrapper">
+              <table className="custom-table">
+                <thead>
+                  <tr>
+                    <th>เหรียญ (Asset)</th>
+                    <th style={{ textAlign: 'right' }}>จำนวน</th>
+                    <th style={{ textAlign: 'right' }}>ทุนซื้อเฉลี่ย</th>
+                    <th style={{ textAlign: 'right' }}>ราคาล่าสุด</th>
+                    <th style={{ textAlign: 'right' }}>มูลค่ารวม</th>
+                    <th>ลบ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cryptoHoldings.map(h => (
+                    <tr key={h.id}>
+                      <td style={{ fontWeight: '700', color: '#10b981' }}>{h.symbol}</td>
+                      <td style={{ textAlign: 'right' }}>{h.balance.toLocaleString(undefined, { maximumFractionDigits: 8 })}</td>
+                      <td style={{ textAlign: 'right' }}>{h.avg_purchase_price ? `$${h.avg_purchase_price.toLocaleString()}` : '-'}</td>
+                      <td style={{ textAlign: 'right' }}>{h.current_price_usd > 0 ? `$${h.current_price_usd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}` : 'กำลังคำนวณ'}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--accent-secondary)' }}>
+                        ${h.value_usd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td>
+                        <button className="btn-logout" onClick={() => handleDeleteCryptoHolding(h.id)} style={{ padding: '6px' }}>
+                          <Trash2 size={12} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {cryptoHoldings.length === 0 && (
+                    <tr>
+                      <td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>ไม่มีเหรียญในพอร์ต</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="section-box">
+            <div className="section-title">➕ เพิ่มเหรียญ / ยอดคงเหลือ (Add Token)</div>
+            <form onSubmit={handleAddCryptoHolding} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div className="form-group">
+                <label className="form-label">ชื่อย่อเหรียญ (เช่น BTC, ETH, SOL, DOGE)</label>
+                <input type="text" className="form-input" required placeholder="เช่น BTC" value={cryptoSymbol} onChange={(e) => setCryptoSymbol(e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">จำนวนคงเหลือ (Balance Amount)</label>
+                <input type="number" step="0.00000001" className="form-input" required placeholder="เช่น 0.0245" value={cryptoBalance} onChange={(e) => setCryptoBalance(e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">ราคาทุนเฉลี่ย USD (ไม่บังคับกรอก)</label>
+                <input type="number" step="0.01" className="form-input" placeholder="เช่น 64800" value={cryptoAvgPrice} onChange={(e) => setCryptoAvgPrice(e.target.value)} />
+              </div>
+              <button type="submit" className="btn-primary" style={{ marginTop: '8px' }}>บันทึกข้อมูล</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderWorkspaceContent = () => {
+    return (
+      <>
         
         {/* Top Control Bar */}
         {page !== 'public' ? (
@@ -1575,9 +2251,13 @@ function App() {
             </div>
           </div>
         )}
+        {page !== 'public' && activeTab === 'networth' && renderNetWorthTab()}
+        {page !== 'public' && activeTab === 'stock' && renderStockTab()}
+        {page !== 'public' && activeTab === 'crypto' && renderCryptoTab()}
 
-        {dashboardStats ? (
-          <>
+        {(activeTab === 'forex' || page === 'public') && (
+          dashboardStats ? (
+            <>
             {/* Date Range Filter Bar */}
             <div className="section-box" style={{ marginBottom: '24px', background: 'var(--bg-secondary)', padding: '16px 20px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
@@ -2298,19 +2978,106 @@ function App() {
               เพิ่มพอร์ตการเทรดตัวแรกของคุณ
             </button>
           </div>
-        )}
-      </div>
+            )
+          )}
+        </>
+      );
+    };
 
-      {/* Footer */}
-      <footer style={{ borderTop: '1px solid var(--border-color)', padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: 'auto' }}>
-        &copy; 2026 THANKHUN Trade Jornal. Powered by FastAPI & React.
-      </footer>
+    return (
+      <div className="dashboard-layout">
+        {page === 'public' ? (
+          <>
+            <nav className="navbar">
+              <a href="/" className="nav-brand">Thankhun<span> trade Jornal</span></a>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', fontWeight: '500' }}>
+                <Eye size={16} style={{ marginRight: '6px', verticalAlign: 'middle', color: 'var(--accent-secondary)' }} />
+                Public View Portfolio
+              </div>
+            </nav>
+            <div className="dashboard-container">
+              {renderWorkspaceContent()}
+            </div>
+          </>
+        ) : (
+          <div className="app-container">
+            {/* Left Sidebar */}
+            <div className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
+              <button className="sidebar-logo" onClick={() => setSidebarCollapsed(!sidebarCollapsed)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', width: '100%', padding: '0 8px' }}>
+                <Database size={22} style={{ color: 'var(--accent-secondary)' }} />
+                {!sidebarCollapsed && <span style={{ color: '#fff', fontSize: '1.15rem', fontWeight: 800 }}>Thankhun <span style={{ color: 'var(--accent-secondary)' }}>Tracker</span></span>}
+              </button>
+              <div className="sidebar-menu">
+                <button className={`sidebar-item ${activeTab === 'networth' ? 'active' : ''}`} onClick={() => { setActiveTab('networth'); setSelectedAccountId('all'); }}>
+                  <Sliders size={18} />
+                  <span className="sidebar-item-text">🏠 ภาพรวมสินทรัพย์</span>
+                </button>
+                <button className={`sidebar-item ${activeTab === 'forex' ? 'active' : ''}`} onClick={() => {
+                  setActiveTab('forex');
+                  const firstForex = accounts.find(a => !a.account_type || a.account_type === 'forex');
+                  if (firstForex) handleAccountSelect(firstForex.id.toString());
+                  else setSelectedAccountId('all');
+                }}>
+                  <Activity size={18} />
+                  <span className="sidebar-item-text">📈 พอร์ต Forex (MT5)</span>
+                </button>
+                <button className={`sidebar-item ${activeTab === 'stock' ? 'active' : ''}`} onClick={() => {
+                  setActiveTab('stock');
+                  const firstStock = accounts.find(a => a.account_type === 'stock');
+                  if (firstStock) handleAccountSelect(firstStock.id.toString());
+                  else setSelectedAccountId('');
+                }}>
+                  <BookOpen size={18} />
+                  <span className="sidebar-item-text">🇹🇭 พอร์ตหุ้นไทย (Stock)</span>
+                </button>
+                <button className={`sidebar-item ${activeTab === 'crypto' ? 'active' : ''}`} onClick={() => {
+                  setActiveTab('crypto');
+                  const firstCrypto = accounts.find(a => a.account_type === 'crypto');
+                  if (firstCrypto) handleAccountSelect(firstCrypto.id.toString());
+                  else setSelectedAccountId('');
+                }}>
+                  <Wallet size={18} />
+                  <span className="sidebar-item-text">🪙 พอร์ตคริปโต (Crypto)</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Main Content Pane */}
+            <div className="main-content">
+              <nav className="navbar" style={{ borderLeft: 'none' }}>
+                <div style={{ display: 'flex', alignItems: 'center' }}></div>
+                <div className="nav-actions">
+                  <div className="nav-user">
+                    <User size={16} />
+                    <span className="nav-user-text">{user?.full_name}</span>
+                  </div>
+                  <button className="btn-secondary" style={{ marginRight: '8px', padding: '8px 14px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px', width: 'auto' }} onClick={() => { setShowSettingsModal(true); fetchBackupStatus(); }}>
+                    <Cpu size={14} style={{ color: 'var(--accent-secondary)' }} />
+                    <span className="nav-btn-text">ตั้งค่าระบบ AI</span>
+                  </button>
+                  <button className="btn-logout" onClick={handleLogout}>
+                    <LogOut size={16} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
+                    <span className="nav-btn-text">ออกจากระบบ</span>
+                  </button>
+                </div>
+              </nav>
+
+              <div className="dashboard-container">
+                {renderWorkspaceContent()}
+              </div>
+
+              <footer style={{ borderTop: '1px solid var(--border-color)', padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: 'auto' }}>
+                &copy; 2026 THANKHUN Trade Journal. Powered by FastAPI & React.
+              </footer>
+            </div>
+          </div>
+        )}
 
       {/* Modal 1: Add Account */}
       {showAddAccountModal && (
         <div className="modal-overlay">
           <div className="modal-content">
-            <h3 style={{ fontSize: '1.3rem', marginBottom: '20px' }}>เพิ่มบัญชีเทรด MT5</h3>
+            <h3 style={{ fontSize: '1.3rem', marginBottom: '20px' }}>เพิ่มพอร์ตการลงทุนใหม่</h3>
             {errorMsg && (
               <div style={{ background: 'var(--error-glow)', color: 'var(--error)', padding: '10px 14px', borderRadius: '8px', marginBottom: '20px', border: '1px solid var(--error)' }}>
                 {errorMsg}
@@ -2319,14 +3086,27 @@ function App() {
             
             <form onSubmit={handleAddAccount}>
               <div className="form-group">
-                <label className="form-label">ชื่อเรียกบัญชี (Account Friendly Name)</label>
-                <input type="text" className="form-input" placeholder="เช่น Gold EA Scalper" required value={newAccName} onChange={(e) => setNewAccName(e.target.value)} />
+                <label className="form-label">ประเภทพอร์ต (Asset Class)</label>
+                <select className="form-input" value={newAccType} onChange={(e) => {
+                  setNewAccType(e.target.value);
+                  setNewAccCurrency(e.target.value === 'stock' ? 'THB' : 'USD');
+                  setNewAccBroker(e.target.value === 'stock' ? 'SET' : e.target.value === 'crypto' ? 'Binance' : '');
+                }}>
+                  <option value="forex"> Forex (MT5 EA Connection)</option>
+                  <option value="stock">🇹🇭 หุ้นไทย (Thailand Stocks)</option>
+                  <option value="crypto">🪙 คริปโตเคอเรนซี (Crypto Wallet / Exchange)</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">ชื่อเรียกพอร์ต (Friendly Name)</label>
+                <input type="text" className="form-input" placeholder={newAccType === 'stock' ? "เช่น พอร์ตหุ้นหลักรับปันผล" : newAccType === 'crypto' ? "เช่น กระเป๋า MetaMask" : "เช่น Gold EA Scalper"} required value={newAccName} onChange={(e) => setNewAccName(e.target.value)} />
               </div>
 
               <div className="sections-grid" style={{ gap: '16px', marginBottom: 0 }}>
                 <div className="form-group">
-                  <label className="form-label">เลขบัญชี (MT5 Login ID)</label>
-                  <input type="text" className="form-input" placeholder="เช่น 50821039" required value={newAccNumber} onChange={(e) => setNewAccNumber(e.target.value)} />
+                  <label className="form-label">{newAccType === 'crypto' ? 'ที่อยู่กระเป๋า (Wallet / Exchange Name)' : 'เลขบัญชี (Account Number / Login ID)'}</label>
+                  <input type="text" className="form-input" placeholder={newAccType === 'crypto' ? "เช่น 0x71C... หรือ Binance" : "เช่น 50821039"} required value={newAccNumber} onChange={(e) => setNewAccNumber(e.target.value)} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">สกุลเงินหลัก (Currency)</label>
@@ -2336,34 +3116,40 @@ function App() {
 
               <div className="sections-grid" style={{ gap: '16px', marginBottom: 0 }}>
                 <div className="form-group">
-                  <label className="form-label">ชื่อโบรกเกอร์ (Broker Company)</label>
-                  <input type="text" className="form-input" placeholder="เช่น Exness Technologies Ltd" required value={newAccBroker} onChange={(e) => setNewAccBroker(e.target.value)} />
+                  <label className="form-label">{newAccType === 'stock' ? 'ตลาดหลักทรัพย์ / โบรคเกอร์' : newAccType === 'crypto' ? 'โบรคเกอร์ / กระเป๋า' : 'โบรกเกอร์ (Broker Company)'}</label>
+                  <input type="text" className="form-input" placeholder={newAccType === 'stock' ? "เช่น SET หรือ InnovestX" : newAccType === 'crypto' ? "เช่น Binance, Solana" : "เช่น Exness"} required value={newAccBroker} onChange={(e) => setNewAccBroker(e.target.value)} />
                 </div>
-                <div className="form-group">
-                  <label className="form-label">ชื่อเซิร์ฟเวอร์ (Server Name)</label>
-                  <input type="text" className="form-input" placeholder="เช่น Exness-MT5-Real10" required value={newAccServer} onChange={(e) => setNewAccServer(e.target.value)} />
-                </div>
+                {newAccType === 'forex' && (
+                  <div className="form-group">
+                    <label className="form-label">ชื่อเซิร์ฟเวอร์ (Server Name)</label>
+                    <input type="text" className="form-input" placeholder="เช่น Exness-MT5-Real10" required value={newAccServer} onChange={(e) => setNewAccServer(e.target.value)} />
+                  </div>
+                )}
               </div>
 
-              <div className="sections-grid" style={{ gap: '16px', marginBottom: 0 }}>
-                <div className="form-group">
-                  <label className="form-label">Leverage</label>
-                  <input type="number" className="form-input" placeholder="100" required value={newAccLeverage} onChange={(e) => setNewAccLeverage(e.target.value)} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">รูปแบบการเชื่อมโยง (Sync Method)</label>
-                  <select className="form-input" value={newAccConnType} onChange={(e) => setNewAccConnType(e.target.value)}>
-                    <option value="publisher_ea">Publisher EA (น้ำหนักเบา - แนะนำสำหรับ Notebook)</option>
-                    <option value="account_sync">Account Sync (ใช้ Investor Password - ออฟไลน์ซิงค์)</option>
-                  </select>
-                </div>
-              </div>
+              {newAccType === 'forex' && (
+                <>
+                  <div className="sections-grid" style={{ gap: '16px', marginBottom: 0 }}>
+                    <div className="form-group">
+                      <label className="form-label">Leverage</label>
+                      <input type="number" className="form-input" placeholder="100" required value={newAccLeverage} onChange={(e) => setNewAccLeverage(e.target.value)} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">รูปแบบการเชื่อมโยง (Sync Method)</label>
+                      <select className="form-input" value={newAccConnType} onChange={(e) => setNewAccConnType(e.target.value)}>
+                        <option value="publisher_ea">Publisher EA (น้ำหนักเบา - แนะนำสำหรับ Notebook)</option>
+                        <option value="account_sync">Account Sync (ใช้ Investor Password - ออฟไลน์ซิงค์)</option>
+                      </select>
+                    </div>
+                  </div>
 
-              {newAccConnType === 'account_sync' && (
-                <div className="form-group">
-                  <label className="form-label">Investor Password (รหัสผ่านดูอย่างเดียว)</label>
-                  <input type="password" className="form-input" placeholder="ป้อนรหัสผ่านเพื่อให้ระบบซิงค์โดยตรง" required value={newAccPassword} onChange={(e) => setNewAccPassword(e.target.value)} />
-                </div>
+                  {newAccConnType === 'account_sync' && (
+                    <div className="form-group">
+                      <label className="form-label">Investor Password (รหัสผ่านดูอย่างเดียว)</label>
+                      <input type="password" className="form-input" placeholder="ป้อนรหัสผ่านเพื่อให้ระบบซิงค์โดยตรง" required value={newAccPassword} onChange={(e) => setNewAccPassword(e.target.value)} />
+                    </div>
+                  )}
+                </>
               )}
 
               <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>

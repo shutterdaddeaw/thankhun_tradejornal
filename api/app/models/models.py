@@ -33,6 +33,7 @@ class TradingAccount(Base):
     server_name = Column(String, nullable=False)
     account_name = Column(String, nullable=False)
     currency = Column(String, default="USD")
+    account_type = Column(String, default="forex")  # forex, stock, crypto
     leverage = Column(Integer, default=100)
     balance = Column(Float, default=0.0)
     equity = Column(Float, default=0.0)
@@ -53,6 +54,15 @@ class TradingAccount(Base):
     metrics = relationship("AccountMetricsDaily", back_populates="account", cascade="all, delete-orphan")
     share_links = relationship("ShareLink", back_populates="account", cascade="all, delete-orphan")
     connection_events = relationship("ConnectionEvent", back_populates="account", cascade="all, delete-orphan")
+    
+    # Stock Relationships
+    stock_holdings = relationship("StockHolding", back_populates="account", cascade="all, delete-orphan")
+    stock_trades = relationship("StockTrade", back_populates="account", cascade="all, delete-orphan")
+    stock_cash = relationship("StockCashBalance", uselist=False, back_populates="account", cascade="all, delete-orphan")
+    
+    # Crypto Relationships
+    crypto_holdings = relationship("CryptoHolding", back_populates="account", cascade="all, delete-orphan")
+    crypto_wallet = relationship("CryptoWallet", uselist=False, back_populates="account", cascade="all, delete-orphan")
 
     __table_args__ = (
         UniqueConstraint("user_id", "account_number", name="uq_user_account_number"),
@@ -254,3 +264,79 @@ class UserBackupLog(Base):
 
     # Relationships
     user = relationship("User", backref="backup_logs")
+
+
+class StockHolding(Base):
+    __tablename__ = "stock_holdings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey("trading_accounts.id"), nullable=False)
+    symbol = Column(String, index=True, nullable=False)
+    volume = Column(Integer, default=0, nullable=False)
+    avg_price = Column(Float, default=0.0, nullable=False)
+    current_price = Column(Float, default=0.0, nullable=False)
+    pnl = Column(Float, default=0.0, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    account = relationship("TradingAccount", back_populates="stock_holdings")
+
+
+class StockTrade(Base):
+    __tablename__ = "stock_trades"
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey("trading_accounts.id"), nullable=False)
+    symbol = Column(String, index=True, nullable=False)
+    action = Column(String, nullable=False)  # BUY, SELL
+    volume = Column(Integer, default=0, nullable=False)
+    price = Column(Float, default=0.0, nullable=False)
+    realized_pnl = Column(Float, default=0.0, nullable=False)
+    date = Column(DateTime, default=datetime.utcnow)
+    reason = Column(String, nullable=True)
+
+    # Relationships
+    account = relationship("TradingAccount", back_populates="stock_trades")
+
+
+class StockCashBalance(Base):
+    __tablename__ = "stock_cash_balances"
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey("trading_accounts.id"), unique=True, nullable=False)
+    cash_balance = Column(Float, default=0.0, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    account = relationship("TradingAccount", back_populates="stock_cash")
+
+
+class CryptoHolding(Base):
+    __tablename__ = "crypto_holdings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey("trading_accounts.id"), nullable=False)
+    symbol = Column(String, index=True, nullable=False)
+    balance = Column(Float, default=0.0, nullable=False)
+    avg_purchase_price = Column(Float, nullable=True)
+    current_price_usd = Column(Float, default=0.0, nullable=False)
+    value_usd = Column(Float, default=0.0, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    account = relationship("TradingAccount", back_populates="crypto_holdings")
+
+
+class CryptoWallet(Base):
+    __tablename__ = "crypto_wallets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey("trading_accounts.id"), unique=True, nullable=False)
+    wallet_address = Column(String, nullable=True)
+    api_key = Column(String, nullable=True)
+    api_secret = Column(String, nullable=True)
+    wallet_type = Column(String, default="address")  # address, binance
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    account = relationship("TradingAccount", back_populates="crypto_wallet")

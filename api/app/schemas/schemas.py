@@ -49,9 +49,10 @@ class TokenPayload(BaseModel):
 class TradingAccountBase(BaseModel):
     account_number: str
     broker_name: str
-    server_name: str
+    server_name: Optional[str] = ""
     account_name: str
     currency: Optional[str] = "USD"
+    account_type: Optional[str] = "forex"  # forex, stock, crypto
     leverage: Optional[int] = 100
     connection_type: Optional[str] = "publisher_ea"  # account_sync or publisher_ea
 

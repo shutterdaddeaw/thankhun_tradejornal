@@ -32,7 +32,7 @@ app.add_middleware(
 )
 
 # Import Routers
-from app.api import auth, accounts, analytics, ingest, public
+from app.api import auth, accounts, analytics, ingest, public, stock, crypto
 
 # Include Routers
 app.include_router(auth.router, prefix="/v1/auth", tags=["Authentication"])
@@ -40,6 +40,8 @@ app.include_router(accounts.router, prefix="/v1/accounts", tags=["Accounts"])
 app.include_router(analytics.router, prefix="/v1/accounts", tags=["Analytics"])
 app.include_router(ingest.router, prefix="/v1/ingest/mt5/publisher", tags=["EA Ingestion"])
 app.include_router(public.router, prefix="/p", tags=["Public Sharing"])
+app.include_router(stock.router, prefix="/v1/stock", tags=["Stock Portfolio"])
+app.include_router(crypto.router, prefix="/v1/crypto", tags=["Crypto Assets"])
 
 @app.get("/")
 def read_root():
