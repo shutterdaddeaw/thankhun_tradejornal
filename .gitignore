@@ -1,0 +1,25 @@
+# Python Virtual Environments
+.venv/
+__pycache__/
+*.pyc
+
+# Local Database & Cache
+backend/jornaltrade.db
+backend/account_*_ai.txt
+backend/ai_output*.txt
+ai_output*.txt
+
+# Node / JS Dependencies
+node_modules/
+dist/
+frontend/node_modules/
+frontend/dist/
+
+# Credentials & Temp Files
+.env
+.env.*
+.agents/
+.gemini/
+
+# Large Executables
+ngrok.exe

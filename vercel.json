@@ -1,0 +1,7 @@
+{
+  "rewrites": [
+    { "source": "/v1/(.*)", "destination": "/api/index.py" },
+    { "source": "/p/(.*)", "destination": "/api/index.py" },
+    { "source": "/static/(.*)", "destination": "/api/index.py" }
+  ]
+}
