@@ -45,6 +45,13 @@ const isCentCurrency = (currency) => {
   return ['USC', 'USDC', 'EURC', 'GBPC', 'USCENT', 'EURCENT', 'CENT'].includes(cur) || cur.endsWith('CENT');
 };
 
+const formatLocalDate = (date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
 function App() {
   const [page, setPage] = useState('login'); // login, register, dashboard, public
   const [token, setToken] = useState(localStorage.getItem('access_token') || '');
@@ -908,28 +915,28 @@ function App() {
     let end = '';
 
     if (preset === 'today') {
-      const todayStr = now.toISOString().split('T')[0];
+      const todayStr = formatLocalDate(now);
       start = todayStr;
       end = todayStr;
     } else if (preset === 'last7') {
       const past = new Date();
       past.setDate(now.getDate() - 7);
-      start = past.toISOString().split('T')[0];
-      end = now.toISOString().split('T')[0];
+      start = formatLocalDate(past);
+      end = formatLocalDate(now);
     } else if (preset === 'last30') {
       const past = new Date();
       past.setDate(now.getDate() - 30);
-      start = past.toISOString().split('T')[0];
-      end = now.toISOString().split('T')[0];
+      start = formatLocalDate(past);
+      end = formatLocalDate(now);
     } else if (preset === 'thisMonth') {
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      start = startOfMonth.toISOString().split('T')[0];
-      end = now.toISOString().split('T')[0];
+      start = formatLocalDate(startOfMonth);
+      end = formatLocalDate(now);
     } else if (preset === 'lastMonth') {
       const firstOfLast = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       const lastOfLast = new Date(now.getFullYear(), now.getMonth(), 0);
-      start = firstOfLast.toISOString().split('T')[0];
-      end = lastOfLast.toISOString().split('T')[0];
+      start = formatLocalDate(firstOfLast);
+      end = formatLocalDate(lastOfLast);
     }
 
     setStartDate(start);
