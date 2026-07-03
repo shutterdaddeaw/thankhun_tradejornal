@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import Any, List
 from datetime import datetime
-import yfinance as yf
+import requests
 
 from app.core.database import get_db
 from app.models.models import TradingAccount, StockHolding, StockTrade, StockCashBalance
@@ -17,35 +17,27 @@ def format_symbol(symbol: str) -> str:
         return f"{sym}.BK"
     return sym
 
+def get_stock_price_direct(symbol: str) -> float:
+    try:
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range=1d&interval=1m"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        res = requests.get(url, headers=headers, timeout=2.5)
+        if res.status_code == 200:
+            data = res.json()
+            result = data.get("chart", {}).get("result", [])
+            if result:
+                meta = result[0].get("meta", {})
+                price = meta.get("regularMarketPrice")
+                if price is not None:
+                    return float(price)
+    except Exception as e:
+        print(f"Error fetching stock price direct for {symbol}: {e}")
+    return 0.0
+
 def get_stock_prices(symbols: List[str]) -> dict:
     prices = {}
-    if not symbols:
-        return prices
-    try:
-        tickers_str = " ".join(symbols)
-        tickers = yf.Tickers(tickers_str)
-        for sym in symbols:
-            try:
-                ticker = tickers.tickers[sym]
-                price = ticker.fast_info.get("last_price")
-                if price is None:
-                    hist = ticker.history(period="1d")
-                    if not hist.empty:
-                        price = hist["Close"].iloc[-1]
-                if price is not None:
-                    prices[sym] = float(price)
-            except Exception as e:
-                print(f"Error fetching price for {sym}: {str(e)}")
-                # Try fallback direct ticker call
-                try:
-                    t = yf.Ticker(sym)
-                    hist = t.history(period="1d")
-                    if not hist.empty:
-                        prices[sym] = float(hist["Close"].iloc[-1])
-                except Exception:
-                    pass
-    except Exception as e:
-        print(f"Error calling yfinance: {str(e)}")
+    for sym in symbols:
+        prices[sym] = get_stock_price_direct(sym)
     return prices
 
 def recalculate_stock_account_value(account_id: int, db: Session):
@@ -365,18 +357,41 @@ def get_stock_candles(symbol: str) -> Any:
     """Fetch historical candlestick data for the given stock symbol from Yahoo Finance."""
     try:
         sym = format_symbol(symbol)
-        ticker = yf.Ticker(sym)
-        hist = ticker.history(period="6mo", interval="1d")
-        res = []
-        for date_idx, row in hist.iterrows():
-            res.append({
-                "date": date_idx.strftime("%Y-%m-%d"),
-                "open": float(row["Open"]),
-                "high": float(row["High"]),
-                "low": float(row["Low"]),
-                "close": float(row["Close"]),
-                "volume": int(row["Volume"])
-            })
-        return res
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?range=6mo&interval=1d"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        res = requests.get(url, headers=headers, timeout=5)
+        if res.status_code != 200:
+            raise HTTPException(status_code=400, detail=f"Yahoo Finance returned status {res.status_code}")
+            
+        data = res.json()
+        result = data.get("chart", {}).get("result", [])
+        if not result:
+            return []
+            
+        timestamps = result[0].get("timestamp", [])
+        quote = result[0].get("indicators", {}).get("quote", [{}])[0]
+        
+        opens = quote.get("open", [])
+        highs = quote.get("high", [])
+        lows = quote.get("low", [])
+        closes = quote.get("close", [])
+        volumes = quote.get("volume", [])
+        
+        candles = []
+        for i, ts in enumerate(timestamps):
+            if i < len(opens) and i < len(closes) and opens[i] is not None and closes[i] is not None:
+                # Convert timestamp to YYYY-MM-DD
+                # We can construct date string natively without dependency
+                import time
+                date_str = time.strftime('%Y-%m-%d', time.gmtime(ts))
+                candles.append({
+                    "date": date_str,
+                    "open": float(opens[i]),
+                    "high": float(highs[i]) if highs[i] is not None else float(opens[i]),
+                    "low": float(lows[i]) if lows[i] is not None else float(opens[i]),
+                    "close": float(closes[i]),
+                    "volume": int(volumes[i]) if volumes[i] is not None else 0
+                })
+        return candles
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch historical chart: {str(e)}")
