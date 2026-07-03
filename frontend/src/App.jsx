@@ -2174,7 +2174,15 @@ function App() {
               {selectedAccountId && (
                 <button 
                   className="btn-secondary" 
-                  onClick={() => loadAccountData(selectedAccountId)} 
+                  onClick={() => {
+                    if (activeTab === 'crypto') {
+                      handleSyncCryptoPrices();
+                    } else if (activeTab === 'stock') {
+                      loadStockData(selectedAccountId);
+                    } else {
+                      loadAccountData(selectedAccountId);
+                    }
+                  }} 
                   disabled={isSyncing}
                   style={{ display: 'flex', alignItems: 'center', gap: '8px', height: '38px' }}
                 >
