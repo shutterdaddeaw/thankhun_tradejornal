@@ -243,3 +243,14 @@ class ConnectionEvent(Base):
 
     # Relationships
     account = relationship("TradingAccount", back_populates="connection_events")
+
+
+class UserBackupLog(Base):
+    __tablename__ = "user_backup_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    backup_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User", backref="backup_logs")

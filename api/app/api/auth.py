@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from datetime import timedelta
+from datetime import timedelta, datetime, date
 from typing import Any
 import requests
 import secrets
@@ -9,7 +10,7 @@ import secrets
 from app.core.database import get_db
 from app.core.config import settings
 from app.core.security import get_password_hash, verify_password, create_access_token, create_refresh_token, verify_token
-from app.models.models import User
+from app.models.models import User, UserBackupLog, TradingAccount, Deal, PositionOpen, AccountSyncState, ShareLink, ConnectionEvent
 from app.schemas.schemas import UserCreate, UserResponse, Token, AISettingsUpdate
 from app.api.deps import get_current_user
 
@@ -183,3 +184,77 @@ def google_login(payload: dict, db: Session = Depends(get_db)) -> Any:
         "refresh_token": create_refresh_token(user.id, expires_delta=refresh_token_expires),
         "token_type": "bearer",
     }
+
+
+@router.get("/backup")
+def download_backup(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """Export all user configuration and trading data as a single JSON download."""
+    def to_dict(model_instance):
+        if model_instance is None:
+            return None
+        d = {}
+        for column in model_instance.__table__.columns:
+            val = getattr(model_instance, column.name)
+            if isinstance(val, (datetime, date)):
+                d[column.name] = val.isoformat()
+            else:
+                d[column.name] = val
+        return d
+
+    def serialize_list(query_result):
+        return [to_dict(item) for item in query_result]
+
+    # Query all user's data
+    user_accounts = db.query(TradingAccount).filter(TradingAccount.user_id == current_user.id).all()
+    account_ids = [acc.id for acc in user_accounts]
+
+    deals = db.query(Deal).filter(Deal.account_id.in_(account_ids)).all() if account_ids else []
+    positions = db.query(PositionOpen).filter(PositionOpen.account_id.in_(account_ids)).all() if account_ids else []
+    sync_states = db.query(AccountSyncState).filter(AccountSyncState.account_id.in_(account_ids)).all() if account_ids else []
+    share_links = db.query(ShareLink).filter(ShareLink.account_id.in_(account_ids)).all() if account_ids else []
+    conn_events = db.query(ConnectionEvent).filter(ConnectionEvent.account_id.in_(account_ids)).all() if account_ids else []
+
+    backup_payload = {
+        "backup_version": "1.0",
+        "exported_at": datetime.utcnow().isoformat(),
+        "user": {
+            "email": current_user.email,
+            "full_name": current_user.full_name,
+            "ai_provider": current_user.ai_provider,
+            "ai_api_key": current_user.ai_api_key,
+            "ai_model": current_user.ai_model,
+            "ai_base_url": current_user.ai_base_url,
+        },
+        "trading_accounts": serialize_list(user_accounts),
+        "deals": serialize_list(deals),
+        "positions_open": serialize_list(positions),
+        "sync_states": serialize_list(sync_states),
+        "share_links": serialize_list(share_links),
+        "connection_events": serialize_list(conn_events)
+    }
+
+    # Log the backup event in database
+    log_entry = UserBackupLog(user_id=current_user.id, backup_at=datetime.utcnow())
+    db.add(log_entry)
+    db.commit()
+
+    # Return as JSON response with headers to trigger browser download
+    headers = {
+        "Content-Disposition": f"attachment; filename=thankhun_jornal_backup_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
+    }
+    return JSONResponse(content=backup_payload, headers=headers)
+
+
+@router.get("/backup/status")
+def get_backup_status(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """Retrieve the timestamp of the last database backup for the user."""
+    last_log = db.query(UserBackupLog).filter(UserBackupLog.user_id == current_user.id).order_by(UserBackupLog.backup_at.desc()).first()
+    if last_log:
+        return {"last_backup_at": last_log.backup_at.isoformat()}
+    return {"last_backup_at": None}

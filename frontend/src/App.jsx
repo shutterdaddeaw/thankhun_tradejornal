@@ -21,6 +21,8 @@ import {
   Sliders,
   Eye,
   EyeOff,
+  Database,
+  Download,
   Settings,
   ArrowUpRight,
   Wallet,
@@ -91,6 +93,7 @@ function App() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showEditAccountModal, setShowEditAccountModal] = useState(false);
+  const [lastBackupTime, setLastBackupTime] = useState(null);
   const [activeGuideToken, setActiveGuideToken] = useState('');
   const [activeShareSlug, setActiveShareSlug] = useState('');
   const [shareConfig, setShareConfig] = useState({ show_balance: true, show_magic: false, show_comment: false });
@@ -277,6 +280,49 @@ function App() {
       console.error('Failed to auto-refresh session token:', err);
     }
     return false;
+  };
+
+  const fetchBackupStatus = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/v1/auth/backup/status`, {
+        headers: getHeaders()
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setLastBackupTime(data.last_backup_at);
+      }
+    } catch (err) {
+      console.error('Failed to fetch backup status:', err);
+    }
+  };
+
+  const handleDownloadBackup = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/v1/auth/backup`, {
+        headers: getHeaders()
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        const d = String(now.getDate()).padStart(2, '0');
+        a.download = `thankhun_jornal_backup_${y}${m}${d}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+        await fetchBackupStatus(); // Refresh timestamp
+      } else {
+        alert('ดาวน์โหลดไฟล์สำรองข้อมูลล้มเหลว');
+      }
+    } catch (err) {
+      console.error('Failed to download backup:', err);
+      alert('เกิดข้อผิดพลาดในการดาวน์โหลดไฟล์สำรองข้อมูล');
+    }
   };
 
   const loadUserData = async () => {
@@ -1394,7 +1440,7 @@ function App() {
               <User size={16} />
               <span className="nav-user-text">{user?.full_name}</span>
             </div>
-            <button className="btn-secondary" style={{ marginRight: '8px', padding: '8px 14px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px', width: 'auto' }} onClick={() => setShowSettingsModal(true)}>
+            <button className="btn-secondary" style={{ marginRight: '8px', padding: '8px 14px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px', width: 'auto' }} onClick={() => { setShowSettingsModal(true); fetchBackupStatus(); }}>
               <Cpu size={14} style={{ color: 'var(--accent-secondary)' }} />
               <span className="nav-btn-text">ตั้งค่าระบบ AI</span>
             </button>
@@ -2518,6 +2564,26 @@ function App() {
                   )}
                 </>
               )}
+
+              <hr style={{ borderColor: 'rgba(255,255,255,0.08)', margin: '24px 0' }} />
+
+              <h3 style={{ fontSize: '1.1rem', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Database size={18} style={{ color: 'var(--accent-secondary)' }} />
+                ระบบสำรองข้อมูลพอร์ต (Database Backup)
+              </h3>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '14px', lineHeight: '1.5' }}>
+                ดาวน์โหลดข้อมูลประวัติการเทรด พอร์ตและค่าคอนฟิกทั้งหมดของคุณลงเครื่องคอมพิวเตอร์เป็นไฟล์สำรองข้อมูล JSON เพื่อความปลอดภัย
+              </p>
+              
+              <div style={{ background: 'rgba(255,255,255,0.03)', padding: '12px 14px', borderRadius: '8px', border: '1px solid var(--border-color)', marginBottom: '16px' }}>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                  📅 สำรองข้อมูลล่าสุด: <strong style={{ color: lastBackupTime ? 'var(--success)' : 'var(--text-muted)' }}>{lastBackupTime ? new Date(lastBackupTime).toLocaleString('th-TH') : 'ยังไม่มีประวัติการสำรอง'}</strong>
+                </div>
+                <button type="button" className="btn-secondary" onClick={handleDownloadBackup} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: 'auto', background: 'rgba(0, 255, 209, 0.1)', borderColor: 'rgba(0, 255, 209, 0.3)', color: 'var(--accent-secondary)', padding: '8px 14px', fontSize: '0.85rem' }}>
+                  <Download size={14} />
+                  ดาวน์โหลดไฟล์สำรอง (.json)
+                </button>
+              </div>
 
               <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
                 <button type="submit" className="btn-primary" style={{ width: 'auto', padding: '10px 24px' }}>บันทึกตั้งค่า AI</button>
