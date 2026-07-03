@@ -94,6 +94,7 @@ function App() {
   // Sidebar Navigation & Layout
   const [activeTab, setActiveTab] = useState('networth'); // networth, forex, stock, crypto
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [usdThbRate, setUsdThbRate] = useState(33.0); // real-time USD/THB rate
   
   // Stock Portfolio States
   const [stockHoldings, setStockHoldings] = useState([]);
@@ -369,6 +370,7 @@ function App() {
         setAiModel(userData.ai_model || '');
         setAiBaseUrl(userData.ai_base_url || '');
         await loadAccounts();
+        fetchExchangeRate();
       } else if (res.status === 401) {
         // Access token expired, attempt auto-refresh
         const refreshed = await attemptTokenRefresh();
@@ -380,6 +382,7 @@ function App() {
       } else {
         setUser({ email: 'thankhun@trader.com', full_name: 'Thankhun Master' });
         await loadAccounts();
+        fetchExchangeRate();
       }
     } catch (err) {
       handleLogout();
@@ -703,6 +706,18 @@ function App() {
           loadAccountData(accountId);
         }
       }
+    }
+  };
+
+  const fetchExchangeRate = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/v1/utils/exchange-rate`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.usd_thb) setUsdThbRate(data.usd_thb);
+      }
+    } catch (e) {
+      console.warn('Could not fetch exchange rate, using default 33.0');
     }
   };
 
@@ -1695,29 +1710,49 @@ function App() {
     const stockTotal = stockAccs.reduce((sum, a) => sum + a.equity, 0);
     const cryptoTotal = cryptoAccs.reduce((sum, a) => sum + a.equity, 0);
     
-    const donutData = [
-      { name: 'Forex (USD equivalent)', value: forexTotal, color: 'var(--accent-primary)' },
-      { name: 'Stocks (converted to USD 1:35)', value: stockTotal / 35.0, color: 'var(--accent-secondary)' },
-      { name: 'Crypto (USD)', value: cryptoTotal, color: '#10b981' }
-    ].filter(d => d.value > 0);
+    // Use real-time rate, fallback 33
+    const rate = usdThbRate || 33.0;
+    
+    // All converted to USD for comparison
+    const forexUSD = forexTotal;   // already USD
+    const stockUSD = stockTotal / rate;  // THB -> USD
+    const cryptoUSD = cryptoTotal; // already USD
 
-    const totalNetWorthUSD = forexTotal + (stockTotal / 35.0) + cryptoTotal;
+    const totalNetWorthUSD = forexUSD + stockUSD + cryptoUSD;
+    const totalNetWorthTHB = totalNetWorthUSD * rate;
+    
+    const donutData = [
+      { name: 'Forex (USD)', value: forexUSD, color: 'var(--accent-primary)' },
+      { name: 'Stocks (THB→USD)', value: stockUSD, color: 'var(--accent-secondary)' },
+      { name: 'Crypto (USD)', value: cryptoUSD, color: '#10b981' }
+    ].filter(d => d.value > 0);
 
     return (
       <div className="networth-dashboard">
         <div className="stats-grid">
           <div className="stat-card stat-card-featured">
-            <div className="stat-title">💰 รวมสินทรัพย์สุทธิ (Total Net Worth ~USD)</div>
+            <div className="stat-title">💰 รวมสินทรัพย์สุทธิ (Total Net Worth)</div>
             <div className="stat-value">
               {hideBalances ? '••••' : `$${totalNetWorthUSD.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
             </div>
-            <div className="stat-desc">ประมาณการรวมสกุลเงิน (คำนวณอัตราแลกเปลี่ยน 1 USD = 35 THB)</div>
+            <div style={{ fontSize: '1.15rem', fontWeight: '600', color: 'var(--accent-secondary)', marginTop: '4px' }}>
+              {hideBalances ? '••••' : `≈ ฿${totalNetWorthTHB.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} THB`}
+            </div>
+            <div className="stat-desc" style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px' }}>
+              <span style={{ background: 'rgba(255,255,255,0.08)', borderRadius: '6px', padding: '2px 8px', fontSize: '0.78rem' }}>
+                🔄 1 USD = {rate.toFixed(2)} THB
+              </span>
+              <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>real-time ·  Yahoo Finance</span>
+            </div>
           </div>
           
           <div className="stat-card">
             <div className="stat-title" style={{ color: 'var(--accent-primary)' }}>📈 Forex Portfolio</div>
             <div className="stat-value">
-              {hideBalances ? '••••' : `$${forexTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+              {hideBalances ? '••••' : `$${forexTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+            </div>
+            <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+              {hideBalances ? '••••' : `≈ ฿${(forexTotal * rate).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} THB`}
             </div>
             <div className="stat-desc">{forexAccs.length} พอร์ตเทรด MT5</div>
           </div>
@@ -1725,7 +1760,10 @@ function App() {
           <div className="stat-card">
             <div className="stat-title" style={{ color: 'var(--accent-secondary)' }}>🇹🇭 Thai Stocks Portfolio</div>
             <div className="stat-value">
-              {hideBalances ? '••••' : `${stockTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })} THB`}
+              {hideBalances ? '••••' : `฿${stockTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+            </div>
+            <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+              {hideBalances ? '••••' : `≈ $${stockUSD.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`}
             </div>
             <div className="stat-desc">{stockAccs.length} บัญชีหุ้นไทย</div>
           </div>
@@ -1733,7 +1771,10 @@ function App() {
           <div className="stat-card">
             <div className="stat-title" style={{ color: '#10b981' }}>🪙 Crypto Assets Portfolio</div>
             <div className="stat-value">
-              {hideBalances ? '••••' : `$${cryptoTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+              {hideBalances ? '••••' : `$${cryptoTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+            </div>
+            <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+              {hideBalances ? '••••' : `≈ ฿${(cryptoTotal * rate).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} THB`}
             </div>
             <div className="stat-desc">{cryptoAccs.length} ที่อยู่กระเป๋า / Exchange</div>
           </div>
@@ -1741,7 +1782,7 @@ function App() {
 
         <div className="combined-summary-grid">
           <div className="section-box" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-            <div className="section-title" style={{ width: '100%' }}>📊 สัดส่วนพอร์ตการลงทุน (Asset Allocation ~USD)</div>
+            <div className="section-title" style={{ width: '100%' }}>📊 สัดส่วนพอร์ตการลงทุน (Asset Allocation)</div>
             {donutData.length > 0 ? (
               <div style={{ width: '100%', height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <ResponsiveContainer width="100%" height="100%">
@@ -1759,7 +1800,7 @@ function App() {
                         <Cell key={`cell-${idx}`} fill={entry.color} />
                       ))}
                     </Pie>
-                    <Tooltip formatter={(value) => `$${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`} />
+                    <Tooltip formatter={(value) => [`$${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`, 'USD']} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>

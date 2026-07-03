@@ -298,13 +298,77 @@ def fetch_evm_balances(address: str) -> dict:
             
     return tokens
 
+def fetch_solana_balances(address: str) -> dict:
+    tokens = {}
+    
+    # 1. Fetch native SOL balance
+    try:
+        url = "https://api.mainnet-beta.solana.com"
+        payload = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "getBalance",
+            "params": [address]
+        }
+        res = requests.post(url, json=payload, timeout=4)
+        if res.status_code == 200:
+            result = res.json().get("result", {})
+            value = result.get("value", 0)
+            sol_balance = float(value) / 1e9
+            if sol_balance > 0.0001:
+                p_feed = get_crypto_prices(["SOL"])
+                sol_price = p_feed.get("SOL", 0.0)
+                tokens["SOL"] = {"balance": sol_balance, "price": sol_price}
+    except Exception as e:
+        print(f"Error fetching SOL balance: {e}")
+        
+    # 2. Fetch SPL token balances
+    try:
+        url = "https://api.mainnet-beta.solana.com"
+        payload = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "getTokenAccountsByOwner",
+            "params": [
+                address,
+                {"programId": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"},
+                {"encoding": "jsonParsed"}
+            ]
+        }
+        res = requests.post(url, json=payload, timeout=4)
+        if res.status_code == 200:
+            result = res.json().get("result", {}).get("value", [])
+            for item in result:
+                parsed_info = item.get("account", {}).get("data", {}).get("parsed", {}).get("info", {})
+                mint = parsed_info.get("mint")
+                token_amount = parsed_info.get("tokenAmount", {})
+                ui_amount = token_amount.get("uiAmount", 0.0)
+                
+                # Check if it is a common token and balance is positive
+                SOL_COMMON_TOKENS = {
+                    "EPjFWdd5AufqSSjN7mvkyCeqMTJ5k91yZYJJELzSM5j": "USDC",
+                    "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB": "USDT",
+                    "JUPyiwrYJF1m4F2Xbh9Q56o6qg35jNMJwi17CZaYn94": "JUP",
+                    "HZ128J7hU2GAtu4YdJ884751z31Y15K4edC65W1RnaJQ": "PYTH",
+                    "jtoJsD2C2v1h7d3Y93ePpwVYQgx2H87iDG88A7tJGsV": "JTO"
+                }
+                if mint in SOL_COMMON_TOKENS and ui_amount > 0.0001:
+                    symbol = SOL_COMMON_TOKENS[mint]
+                    p_feed = get_crypto_prices([symbol])
+                    price = p_feed.get(symbol, 0.0)
+                    tokens[symbol] = {"balance": ui_amount, "price": price}
+    except Exception as e:
+        print(f"Error fetching SPL tokens: {e}")
+        
+    return tokens
+
 @router.post("/accounts/{account_id}/sync")
 def sync_prices(
     account_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Any:
-    """Sync prices for all crypto holdings under this account, or auto-scan blockchain balances if address is EVM."""
+    """Sync prices for all crypto holdings under this account, or auto-scan blockchain balances if address is EVM or Solana."""
     account = db.query(TradingAccount).filter(
         TradingAccount.id == account_id,
         TradingAccount.user_id == current_user.id
@@ -314,10 +378,11 @@ def sync_prices(
 
     address = (account.account_number or "").strip()
     is_evm = address.lower().startswith("0x") and len(address) == 42
+    is_sol = len(address) >= 32 and len(address) <= 44 and not address.lower().startswith("0x")
     
-    if is_evm:
-        # Auto-scan MetaMask / EVM wallet using Blockscout!
-        tokens = fetch_evm_balances(address)
+    if is_evm or is_sol:
+        # Auto-scan EVM or Solana wallet!
+        tokens = fetch_evm_balances(address) if is_evm else fetch_solana_balances(address)
         
         # Get existing holdings to delete any that are no longer present
         existing_holdings = db.query(CryptoHolding).filter(CryptoHolding.account_id == account_id).all()
