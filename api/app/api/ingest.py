@@ -227,6 +227,8 @@ def ingest_snapshot(
     account.balance = payload.balance
     account.equity = payload.equity
     account.profit = payload.profit
+    account.status = "active_publisher_ea"
+    account.connection_type = "publisher_ea"
     
     # 2. Clear old open positions
     db.query(PositionOpen).filter(PositionOpen.account_id == account.id).delete()
@@ -275,6 +277,9 @@ def ingest_deals(
     """
     Adds new deals incrementally.
     """
+    account.status = "active_publisher_ea"
+    account.connection_type = "publisher_ea"
+    
     if not payload.deals:
         return {"status": "success", "message": "No new deals provided"}
         
@@ -350,6 +355,9 @@ def ingest_heartbeat(
     """
     Heartbeat endpoint to verify connection status.
     """
+    account.status = "active_publisher_ea"
+    account.connection_type = "publisher_ea"
+    
     sync_state = db.query(AccountSyncState).filter(AccountSyncState.account_id == account.id).first()
     if sync_state:
         sync_state.last_successful_sync_time = datetime.utcnow()
