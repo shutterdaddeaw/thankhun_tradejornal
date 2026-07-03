@@ -2405,7 +2405,7 @@ function App() {
                 <div className="section-title">
                   <span>ตารางสรุปสถานะแต่ละพอร์ต (Portfolio Breakdown)</span>
                   <span className="badge" style={{ background: 'rgba(0, 255, 209, 0.1)', color: 'var(--accent-secondary)' }}>
-                    {accounts.length} พอร์ตเทรดทั้งหมด
+                    {accounts.filter(a => !a.account_type || a.account_type === 'forex').length} พอร์ต Forex
                   </span>
                 </div>
                 
@@ -2416,7 +2416,7 @@ function App() {
                         <th>ชื่อพอร์ต (Account Name)</th>
                         <th>โบรกเกอร์ (Broker)</th>
                         <th>เลขบัญชี (Account No.)</th>
-                        <th>ประเภทการเชื่อมต่อ</th>
+                        <th style={{ whiteSpace: 'nowrap', minWidth: '140px' }}>ประเภทการเชื่อมต่อ</th>
                         <th>Balance</th>
                         <th>Equity</th>
                         <th>Floating PnL</th>
@@ -2425,14 +2425,16 @@ function App() {
                       </tr>
                     </thead>
                     <tbody>
-                      {accounts.map(acc => (
+                      {accounts
+                        .filter(a => !a.account_type || a.account_type === 'forex')
+                        .map(acc => (
                         <tr key={acc.id}>
                           <td style={{ fontWeight: '600' }}>{acc.account_name}</td>
                           <td>{acc.broker_name}</td>
                           <td style={{ fontFamily: 'monospace' }}>{acc.account_number}</td>
-                          <td>
-                            <span className="badge badge-success" style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--text-secondary)' }}>
-                              {acc.connection_type === 'publisher_ea' ? 'MT5 EA' : 'Broker Direct'}
+                          <td style={{ whiteSpace: 'nowrap' }}>
+                            <span className="badge badge-success" style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                              {acc.connection_type === 'publisher_ea' ? '🤖 MT5 EA' : '🔗 Broker Direct'}
                             </span>
                           </td>
                           <td>
