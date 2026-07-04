@@ -110,6 +110,9 @@ function App() {
   const [allStockHoldings, setAllStockHoldings] = useState([]);
   const [allStockCashTotal, setAllStockCashTotal] = useState(0);
   const [allCryptoHoldings, setAllCryptoHoldings] = useState([]);
+  // Net Worth table sort state
+  const [nwSortKey, setNwSortKey] = useState('account_name');
+  const [nwSortDir, setNwSortDir] = useState('asc');
   
   // Form states for manual additions
   const [newAccType, setNewAccType] = useState('forex'); // forex, stock, crypto
@@ -1726,88 +1729,142 @@ function App() {
     const forexAccs = accounts.filter(a => !a.account_type || a.account_type === 'forex');
     const stockAccs = accounts.filter(a => a.account_type === 'stock');
     const cryptoAccs = accounts.filter(a => a.account_type === 'crypto');
-    
+
     const forexTotal = forexAccs.reduce((sum, a) => sum + (isCentCurrency(a.currency) ? a.equity / 100 : a.equity), 0);
     const stockTotal = stockAccs.reduce((sum, a) => sum + a.equity, 0);
     const cryptoTotal = cryptoAccs.reduce((sum, a) => sum + a.equity, 0);
-    
-    // Use real-time rate, fallback 33
-    const rate = usdThbRate || 33.0;
-    
-    // All converted to USD for comparison
-    const forexUSD = forexTotal;   // already USD
-    const stockUSD = stockTotal / rate;  // THB -> USD
-    const cryptoUSD = cryptoTotal; // already USD
 
+    const rate = usdThbRate || 33.0;
+    const forexUSD = forexTotal;
+    const stockUSD = stockTotal / rate;
+    const cryptoUSD = cryptoTotal;
     const totalNetWorthUSD = forexUSD + stockUSD + cryptoUSD;
     const totalNetWorthTHB = totalNetWorthUSD * rate;
-    
+
     const donutData = [
       { name: 'Forex (USD)', value: forexUSD, color: '#818cf8' },
       { name: 'Stocks (THB→USD)', value: stockUSD, color: '#f59e0b' },
       { name: 'Crypto (USD)', value: cryptoUSD, color: '#10b981' }
     ].filter(d => d.value > 0);
 
+    const handleNwSort = (key) => {
+      if (nwSortKey === key) {
+        setNwSortDir(d => d === 'asc' ? 'desc' : 'asc');
+      } else {
+        setNwSortKey(key);
+        setNwSortDir('asc');
+      }
+    };
+
+    const sortedAccounts = [...accounts].sort((a, b) => {
+      let va, vb;
+      if (nwSortKey === 'account_name') { va = a.account_name?.toLowerCase(); vb = b.account_name?.toLowerCase(); }
+      else if (nwSortKey === 'account_type') { va = (a.account_type || 'forex'); vb = (b.account_type || 'forex'); }
+      else if (nwSortKey === 'broker_name') { va = a.broker_name?.toLowerCase(); vb = b.broker_name?.toLowerCase(); }
+      else if (nwSortKey === 'equity') {
+        va = isCentCurrency(a.currency) ? a.equity / 100 : a.equity;
+        vb = isCentCurrency(b.currency) ? b.equity / 100 : b.equity;
+      }
+      if (va < vb) return nwSortDir === 'asc' ? -1 : 1;
+      if (va > vb) return nwSortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    const SortIcon = ({ col }) => {
+      if (nwSortKey !== col) return <span style={{ opacity: 0.3, marginLeft: '4px' }}>↕</span>;
+      return <span style={{ marginLeft: '4px', color: 'var(--accent-secondary)' }}>{nwSortDir === 'asc' ? '↑' : '↓'}</span>;
+    };
+
+    const thStyle = (col) => ({
+      cursor: 'pointer',
+      userSelect: 'none',
+      whiteSpace: 'nowrap',
+      transition: 'color 0.15s',
+      color: nwSortKey === col ? 'var(--accent-secondary)' : undefined,
+    });
+
     return (
       <div className="networth-dashboard">
-        <div className="stats-grid">
-          <div className="stat-card stat-card-featured">
-            <div className="stat-title">💰 รวมสินทรัพย์สุทธิ (Total Net Worth)</div>
-            <div className="stat-value">
-              {hideBalances ? '••••' : `$${totalNetWorthUSD.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+
+        {/* ── แถวที่ 1: Hero Total Net Worth ── */}
+        <div style={{
+          background: 'linear-gradient(135deg, rgba(129,140,248,0.15) 0%, rgba(16,185,129,0.10) 100%)',
+          border: '1px solid rgba(129,140,248,0.3)',
+          borderRadius: '16px',
+          padding: '32px 36px',
+          marginBottom: '16px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '16px',
+        }}>
+          <div>
+            <div style={{ fontSize: '0.95rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '8px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+              💰 รวมสินทรัพย์สุทธิ (Total Net Worth)
             </div>
-            <div style={{ fontSize: '1.15rem', fontWeight: '600', color: 'var(--accent-secondary)', marginTop: '4px' }}>
-              {hideBalances ? '••••' : `≈ ฿${totalNetWorthTHB.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} THB`}
+            <div style={{ fontSize: '3rem', fontWeight: '800', color: '#fff', lineHeight: 1.1, letterSpacing: '-0.02em' }}>
+              {hideBalances ? '••••••' : `$${totalNetWorthUSD.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
             </div>
-            <div className="stat-desc" style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px' }}>
-              <span style={{ background: 'rgba(255,255,255,0.08)', borderRadius: '6px', padding: '2px 8px', fontSize: '0.78rem' }}>
-                🔄 1 USD = {rate.toFixed(2)} THB
-              </span>
-              <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>real-time ·  Yahoo Finance</span>
+            <div style={{ fontSize: '1.35rem', fontWeight: '600', color: 'var(--accent-secondary)', marginTop: '8px' }}>
+              {hideBalances ? '••••' : `≈ ฿${totalNetWorthTHB.toLocaleString(undefined, { maximumFractionDigits: 0 })} THB`}
             </div>
           </div>
-          
-          <div className="stat-card">
-            <div className="stat-title" style={{ color: 'var(--accent-primary)' }}>📈 Forex Portfolio</div>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+            <div style={{ background: 'rgba(255,255,255,0.08)', borderRadius: '8px', padding: '6px 14px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+              🔄 1 USD = {rate.toFixed(2)} THB
+            </div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>real-time · Yahoo Finance</div>
+          </div>
+        </div>
+
+        {/* ── แถวที่ 2: 3 Sub-Portfolio Cards ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '20px' }}>
+          {/* Forex */}
+          <div className="stat-card" style={{ borderTop: '3px solid #818cf8' }}>
+            <div className="stat-title" style={{ color: '#818cf8' }}>📈 Forex Portfolio</div>
             <div className="stat-value">
               {hideBalances ? '••••' : `$${forexTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
             </div>
-            <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
-              {hideBalances ? '••••' : `≈ ฿${(forexTotal * rate).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} THB`}
+            <div style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+              {hideBalances ? '••••' : `≈ ฿${(forexTotal * rate).toLocaleString(undefined, { maximumFractionDigits: 0 })} THB`}
             </div>
             <div className="stat-desc">{forexAccs.length} พอร์ตเทรด MT5</div>
           </div>
 
-          <div className="stat-card">
-            <div className="stat-title" style={{ color: 'var(--accent-secondary)' }}>🇹🇭 Thai Stocks Portfolio</div>
+          {/* Thai Stocks */}
+          <div className="stat-card" style={{ borderTop: '3px solid #f59e0b' }}>
+            <div className="stat-title" style={{ color: '#f59e0b' }}>🇹🇭 Thai Stocks Portfolio</div>
             <div className="stat-value">
               {hideBalances ? '••••' : `฿${stockTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
             </div>
-            <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+            <div style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
               {hideBalances ? '••••' : `≈ $${stockUSD.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`}
             </div>
             <div className="stat-desc">{stockAccs.length} บัญชีหุ้นไทย</div>
           </div>
 
-          <div className="stat-card">
+          {/* Crypto */}
+          <div className="stat-card" style={{ borderTop: '3px solid #10b981' }}>
             <div className="stat-title" style={{ color: '#10b981' }}>🪙 Crypto Assets Portfolio</div>
             <div className="stat-value">
               {hideBalances ? '••••' : `$${cryptoTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
             </div>
-            <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
-              {hideBalances ? '••••' : `≈ ฿${(cryptoTotal * rate).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} THB`}
+            <div style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+              {hideBalances ? '••••' : `≈ ฿${(cryptoTotal * rate).toLocaleString(undefined, { maximumFractionDigits: 0 })} THB`}
             </div>
             <div className="stat-desc">{cryptoAccs.length} ที่อยู่กระเป๋า / Exchange</div>
           </div>
         </div>
 
-        {/* Donut Chart + Portfolio Table side-by-side */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '20px', marginTop: '0' }}>
-          <div className="section-box" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        {/* ── Donut Chart + Sortable Table ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '20px' }}>
+          {/* Donut Chart */}
+          <div className="section-box" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <div className="section-title" style={{ width: '100%' }}>📊 สัดส่วนพอร์ตการลงทุน (Asset Allocation)</div>
             {donutData.length > 0 ? (
               <>
-                <div style={{ width: '100%', height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ width: '100%', height: 300 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
@@ -1846,25 +1903,36 @@ function App() {
             )}
           </div>
 
+          {/* Sortable All-Portfolios Table */}
           <div className="section-box">
             <div className="section-title">💼 พอร์ตการลงทุนทั้งหมด (All Portfolios)</div>
             <div className="table-wrapper">
               <table className="custom-table">
                 <thead>
                   <tr>
-                    <th>ชื่อพอร์ต (Friendly Name)</th>
-                    <th>ประเภทสินทรัพย์</th>
-                    <th>โบรกเกอร์ / แพลตฟอร์ม</th>
-                    <th style={{ textAlign: 'right' }}>มูลค่าสุทธิ์ (Balance)</th>
+                    <th style={thStyle('account_name')} onClick={() => handleNwSort('account_name')}>
+                      ชื่อพอร์ต (Friendly Name)<SortIcon col="account_name" />
+                    </th>
+                    <th style={thStyle('account_type')} onClick={() => handleNwSort('account_type')}>
+                      ประเภทสินทรัพย์<SortIcon col="account_type" />
+                    </th>
+                    <th style={thStyle('broker_name')} onClick={() => handleNwSort('broker_name')}>
+                      โบรกเกอร์ / แพลตฟอร์ม<SortIcon col="broker_name" />
+                    </th>
+                    <th style={{ ...thStyle('equity'), textAlign: 'right' }} onClick={() => handleNwSort('equity')}>
+                      มูลค่าสุทธิ์ (Balance)<SortIcon col="equity" />
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {accounts.map(acc => (
+                  {sortedAccounts.map(acc => (
                     <tr key={acc.id}>
                       <td style={{ fontWeight: '600' }}>{acc.account_name}</td>
                       <td>
-                        <span className={`badge ${acc.account_type === 'stock' ? 'badge-success' : acc.account_type === 'crypto' ? 'badge-secondary' : 'badge-info'}`}
-                          style={{ textTransform: 'uppercase', fontSize: '0.75rem' }}>
+                        <span
+                          className={`badge ${acc.account_type === 'stock' ? 'badge-success' : acc.account_type === 'crypto' ? 'badge-secondary' : 'badge-info'}`}
+                          style={{ textTransform: 'uppercase', fontSize: '0.75rem' }}
+                        >
                           {acc.account_type || 'FOREX'}
                         </span>
                       </td>
