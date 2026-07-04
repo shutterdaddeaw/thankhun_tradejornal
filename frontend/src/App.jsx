@@ -106,6 +106,11 @@ function App() {
   // Crypto Portfolio States
   const [cryptoHoldings, setCryptoHoldings] = useState([]);
   
+  // All-accounts combined States (for combined views)
+  const [allStockHoldings, setAllStockHoldings] = useState([]);
+  const [allStockCashTotal, setAllStockCashTotal] = useState(0);
+  const [allCryptoHoldings, setAllCryptoHoldings] = useState([]);
+  
   // Form states for manual additions
   const [newAccType, setNewAccType] = useState('forex'); // forex, stock, crypto
   const [stockSymbol, setStockSymbol] = useState('');
@@ -503,24 +508,21 @@ function App() {
   const loadStockData = async (accountId) => {
     setIsSyncing(true);
     try {
-      const holdingsRes = await fetch(`${API_BASE_URL}/v1/stock/accounts/${accountId}/holdings`, { headers: getHeaders() });
-      if (holdingsRes.ok) {
-        const holdingsData = await holdingsRes.json();
-        setStockHoldings(holdingsData);
-      }
-      const tradesRes = await fetch(`${API_BASE_URL}/v1/stock/accounts/${accountId}/trades`, { headers: getHeaders() });
-      if (tradesRes.ok) {
-        const tradesData = await tradesRes.json();
-        setStockTrades(tradesData);
-      }
-      const cashRes = await fetch(`${API_BASE_URL}/v1/stock/accounts/${accountId}/cash`, { headers: getHeaders() });
+      // Fetch holdings, trades, cash in parallel for speed
+      const [holdingsRes, tradesRes, cashRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/v1/stock/accounts/${accountId}/holdings`, { headers: getHeaders() }),
+        fetch(`${API_BASE_URL}/v1/stock/accounts/${accountId}/trades`, { headers: getHeaders() }),
+        fetch(`${API_BASE_URL}/v1/stock/accounts/${accountId}/cash`, { headers: getHeaders() })
+      ]);
+      if (holdingsRes.ok) setStockHoldings(await holdingsRes.json());
+      if (tradesRes.ok) setStockTrades(await tradesRes.json());
       if (cashRes.ok) {
         const cashData = await cashRes.json();
         setStockCash(cashData.cash_balance);
         setEditStockCashValue(cashData.cash_balance.toString());
       }
     } catch (err) {
-      console.error("Failed to load stock data:", err);
+      console.error('Failed to load stock data:', err);
     } finally {
       setIsSyncing(false);
     }
@@ -530,12 +532,56 @@ function App() {
     setIsSyncing(true);
     try {
       const holdingsRes = await fetch(`${API_BASE_URL}/v1/crypto/accounts/${accountId}/holdings`, { headers: getHeaders() });
-      if (holdingsRes.ok) {
-        const holdingsData = await holdingsRes.json();
-        setCryptoHoldings(holdingsData);
-      }
+      if (holdingsRes.ok) setCryptoHoldings(await holdingsRes.json());
     } catch (err) {
-      console.error("Failed to load crypto data:", err);
+      console.error('Failed to load crypto data:', err);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const loadAllStockData = async () => {
+    const stockAccs = accounts.filter(a => a.account_type === 'stock');
+    if (stockAccs.length === 0) return;
+    setIsSyncing(true);
+    try {
+      const results = await Promise.all(
+        stockAccs.map(acc =>
+          Promise.all([
+            fetch(`${API_BASE_URL}/v1/stock/accounts/${acc.id}/holdings`, { headers: getHeaders() }).then(r => r.ok ? r.json() : []),
+            fetch(`${API_BASE_URL}/v1/stock/accounts/${acc.id}/cash`, { headers: getHeaders() }).then(r => r.ok ? r.json() : { cash_balance: 0 })
+          ]).then(([holdings, cash]) => ({ acc, holdings, cash: cash.cash_balance || 0 }))
+        )
+      );
+      const merged = results.flatMap(({ acc, holdings }) =>
+        holdings.map(h => ({ ...h, account_name: acc.account_name }))
+      );
+      const totalCash = results.reduce((s, { cash }) => s + cash, 0);
+      setAllStockHoldings(merged);
+      setAllStockCashTotal(totalCash);
+      setStockTrades([]);
+    } catch (err) {
+      console.error('Failed to load all stock data:', err);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const loadAllCryptoData = async () => {
+    const cryptoAccs = accounts.filter(a => a.account_type === 'crypto');
+    if (cryptoAccs.length === 0) return;
+    setIsSyncing(true);
+    try {
+      const results = await Promise.all(
+        cryptoAccs.map(acc =>
+          fetch(`${API_BASE_URL}/v1/crypto/accounts/${acc.id}/holdings`, { headers: getHeaders() })
+            .then(r => r.ok ? r.json() : [])
+            .then(holdings => holdings.map(h => ({ ...h, account_name: acc.account_name, wallet_address: acc.account_number })))
+        )
+      );
+      setAllCryptoHoldings(results.flat());
+    } catch (err) {
+      console.error('Failed to load all crypto data:', err);
     } finally {
       setIsSyncing(false);
     }
@@ -909,89 +955,64 @@ function App() {
   const loadAccountData = async (accountId) => {
     if (!accountId) return;
     if (accountId === 'all') {
-      await loadAllAccountsCombinedData(accounts);
+      await loadAllAccountsCombinedData(accounts.filter(a => !a.account_type || a.account_type === 'forex'));
       return;
     }
     setIsSyncing(true);
     try {
-      // 1. Stats
-      const statsRes = await fetch(`${API_BASE_URL}/v1/accounts/${accountId}/dashboard`, { headers: getHeaders() });
-      let statsData = null;
-      if (statsRes.ok) statsData = await statsRes.json();
-      if (!statsData) return;
+      // Fetch all data in parallel for speed (~4x faster than sequential)
+      const [statsRes, curveRes, calRes, posRes, tradesRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/v1/accounts/${accountId}/dashboard`, { headers: getHeaders() }),
+        fetch(`${API_BASE_URL}/v1/accounts/${accountId}/equity-curve`, { headers: getHeaders() }),
+        fetch(`${API_BASE_URL}/v1/accounts/${accountId}/calendar`, { headers: getHeaders() }),
+        fetch(`${API_BASE_URL}/v1/accounts/${accountId}/positions`, { headers: getHeaders() }),
+        fetch(`${API_BASE_URL}/v1/accounts/${accountId}/trades`, { headers: getHeaders() })
+      ]);
 
+      // 1. Stats
+      let statsData = statsRes.ok ? await statsRes.json() : null;
+      if (!statsData) return;
       const isCent = isCentCurrency(statsData.currency);
       if (isCent) {
         statsData.balance = statsData.balance / 100;
         statsData.equity = statsData.equity / 100;
         statsData.floating_profit = statsData.floating_profit / 100;
         statsData.total_profit = statsData.total_profit / 100;
-        statsData.currency = 'USD'; // Show in USD
+        statsData.currency = 'USD';
       }
       setDashboardStats(statsData);
 
       // 2. Equity Curve
-      const curveRes = await fetch(`${API_BASE_URL}/v1/accounts/${accountId}/equity-curve`, { headers: getHeaders() });
       if (curveRes.ok) {
         let curveData = await curveRes.json();
-        if (isCent) {
-          curveData = curveData.map(pt => ({
-            ...pt,
-            balance: pt.balance / 100,
-            equity: pt.equity / 100,
-            floating_profit: pt.floating_profit / 100
-          }));
-        }
+        if (isCent) curveData = curveData.map(pt => ({ ...pt, balance: pt.balance/100, equity: pt.equity/100, floating_profit: pt.floating_profit/100 }));
         setEquityCurve(curveData);
       }
 
       // 3. Calendar PNL
-      const calRes = await fetch(`${API_BASE_URL}/v1/accounts/${accountId}/calendar`, { headers: getHeaders() });
       if (calRes.ok) {
         let calData = await calRes.json();
-        if (isCent) {
-          calData = calData.map(day => ({
-            ...day,
-            profit: day.profit / 100
-          }));
-        }
+        if (isCent) calData = calData.map(day => ({ ...day, profit: day.profit/100 }));
         setCalendarPnl(calData);
       }
 
       // 4. Open Positions
-      const posRes = await fetch(`${API_BASE_URL}/v1/accounts/${accountId}/positions`, { headers: getHeaders() });
       if (posRes.ok) {
         let posData = await posRes.json();
-        if (isCent) {
-          posData = posData.map(p => ({
-            ...p,
-            profit: p.profit / 100,
-            swap: p.swap / 100,
-            commission: p.commission / 100
-          }));
-        }
+        if (isCent) posData = posData.map(p => ({ ...p, profit: p.profit/100, swap: p.swap/100, commission: p.commission/100 }));
         setOpenPositions(posData);
       } else {
         setOpenPositions([]);
       }
 
       // 5. Closed Trades
-      const tradesRes = await fetch(`${API_BASE_URL}/v1/accounts/${accountId}/trades`, { headers: getHeaders() });
       if (tradesRes.ok) {
         let tradesData = await tradesRes.json();
-        if (isCent) {
-          tradesData = tradesData.map(t => ({
-            ...t,
-            profit: t.profit / 100,
-            swap: t.swap / 100,
-            commission: t.commission / 100
-          }));
-        }
+        if (isCent) tradesData = tradesData.map(t => ({ ...t, profit: t.profit/100, swap: t.swap/100, commission: t.commission/100 }));
         setClosedTrades(tradesData);
       }
 
-      // 6. Set AI Summary Placeholder
-      setAiSummary("### 🤖 บทวิเคราะห์พฤติกรรมการเทรดเชิงจิตวิทยา\n\nระบบดึงสถิติตามช่วงเวลาและ Magic Number เรียบร้อยแล้ว กดปุ่มด้านล่างเพื่อเริ่มเชื่อมต่อและส่งค่าไปให้ระบบ AI ตัวจริงวิเคราะห์ความเสี่ยงและจุดอ่อนของพอร์ตนี้");
+      setAiSummary('### 🤖 บทวิเคราะห์พฤติกรรมการเทรดเชิงจิตวิทยา\n\nระบบดึงสถิติตามช่วงเวลาและ Magic Number เรียบร้อยแล้ว กดปุ่มด้านล่างเพื่อเริ่มเชื่อมต่อและส่งค่าไปให้ระบบ AI ตัวจริงวิเคราะห์ความเสี่ยงและจุดอ่อนของพอร์ตนี้');
     } catch (err) {
       console.error(err);
     } finally {
@@ -1859,6 +1880,98 @@ function App() {
   };
 
   const renderStockTab = () => {
+    // Combined view for all stock portfolios
+    if (selectedAccountId === 'all-stock') {
+      const stockAccs = accounts.filter(a => a.account_type === 'stock');
+      const allMarketValue = allStockHoldings.reduce((s, h) => s + (h.volume * h.current_price), 0);
+      const allTotalValue = allMarketValue + allStockCashTotal;
+      const allUnrealizedPnL = allStockHoldings.reduce((s, h) => s + h.pnl, 0);
+      return (
+        <div className="stock-dashboard">
+          <div className="stats-grid">
+            <div className="stat-card stat-card-featured">
+              <div className="stat-title">💼 มูลค่าพอร์ตหุ้นรวมทั้งหมด</div>
+              <div className="stat-value">{hideBalances ? '••••' : `${allTotalValue.toLocaleString(undefined, { minimumFractionDigits: 2 })} THB`}</div>
+              <div className="stat-desc">{stockAccs.length} พอร์ตหุ้น · เงินสด + มูลค่าหุ้น</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-title">💵 เงินสดรวม</div>
+              <div className="stat-value">{hideBalances ? '••••' : `${allStockCashTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })} THB`}</div>
+              <div className="stat-desc">Cash across all portfolios</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-title">📈 มูลค่าหุ้นรวม (Market Value)</div>
+              <div className="stat-value">{hideBalances ? '••••' : `${allMarketValue.toLocaleString(undefined, { minimumFractionDigits: 2 })} THB`}</div>
+              <div className="stat-desc">{allStockHoldings.length} รายการถือครอง</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-title">📊 กำไร/ขาดทุนสะสม (Unrealized)</div>
+              <div className="stat-value" style={{ color: allUnrealizedPnL >= 0 ? 'var(--success)' : 'var(--error)' }}>
+                {hideBalances ? '••••' : `${allUnrealizedPnL >= 0 ? '+' : ''}${allUnrealizedPnL.toLocaleString(undefined, { minimumFractionDigits: 2 })} THB`}
+              </div>
+              <div className="stat-desc">Unrealized PnL รวม</div>
+            </div>
+          </div>
+          <div className="section-box" style={{ marginTop: '24px' }}>
+            <div className="section-title">
+              <span>📋 หุ้นทั้งหมดในพอร์ต (All Holdings)</span>
+              <span className="badge" style={{ background: 'rgba(0,255,209,0.1)', color: 'var(--accent-secondary)' }}>{allStockHoldings.length} รายการ</span>
+            </div>
+            <div className="table-wrapper">
+              <table className="custom-table">
+                <thead><tr>
+                  <th>พอร์ต</th><th>หุ้น (Symbol)</th><th style={{ textAlign: 'right' }}>จำนวนหุ้น</th>
+                  <th style={{ textAlign: 'right' }}>ราคาทุน</th><th style={{ textAlign: 'right' }}>ราคาล่าสุด</th>
+                  <th style={{ textAlign: 'right' }}>มูลค่า (THB)</th><th style={{ textAlign: 'right' }}>กำไร/ขาดทุน</th>
+                </tr></thead>
+                <tbody>
+                  {allStockHoldings.map((h, i) => (
+                    <tr key={i}>
+                      <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{h.account_name}</td>
+                      <td style={{ fontWeight: '700', color: 'var(--accent-secondary)' }}>{h.symbol}</td>
+                      <td style={{ textAlign: 'right' }}>{h.volume.toLocaleString()}</td>
+                      <td style={{ textAlign: 'right' }}>{h.avg_cost ? h.avg_cost.toFixed(2) : '-'}</td>
+                      <td style={{ textAlign: 'right' }}>{h.current_price ? h.current_price.toFixed(2) : '-'}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{hideBalances ? '••••' : (h.volume * h.current_price).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 'bold', color: h.pnl >= 0 ? 'var(--success)' : 'var(--error)' }}>
+                        {hideBalances ? '••••' : `${h.pnl >= 0 ? '+' : ''}${h.pnl.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                      </td>
+                    </tr>
+                  ))}
+                  {allStockHoldings.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>ไม่มีหุ้นในพอร์ต</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div className="section-box" style={{ marginTop: '24px' }}>
+            <div className="section-title">
+              <span>📊 สรุปแต่ละพอร์ตหุ้น (Portfolio Breakdown)</span>
+              <span className="badge" style={{ background: 'rgba(0,255,209,0.1)', color: 'var(--accent-secondary)' }}>{stockAccs.length} พอร์ต</span>
+            </div>
+            <div className="table-wrapper">
+              <table className="custom-table">
+                <thead><tr>
+                  <th>ชื่อพอร์ต</th><th>โบรกเกอร์</th>
+                  <th style={{ textAlign: 'right' }}>มูลค่าพอร์ต (THB)</th>
+                </tr></thead>
+                <tbody>
+                  {stockAccs.map(acc => (
+                    <tr key={acc.id}>
+                      <td style={{ fontWeight: '600' }}>{acc.account_name}</td>
+                      <td>{acc.broker_name}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--accent-secondary)' }}>
+                        {hideBalances ? '••••' : `${acc.equity.toLocaleString(undefined, { minimumFractionDigits: 2 })} THB`}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     const activeAcc = accounts.find(a => a.id.toString() === selectedAccountId);
     if (!activeAcc || activeAcc.account_type !== 'stock') {
       return (
@@ -2078,6 +2191,97 @@ function App() {
   };
 
   const renderCryptoTab = () => {
+    // Combined view for all crypto wallets
+    if (selectedAccountId === 'all-crypto') {
+      const cryptoAccs = accounts.filter(a => a.account_type === 'crypto');
+      const allCryptoTotal = allCryptoHoldings.reduce((s, h) => s + h.value_usd, 0);
+      const rate = usdThbRate || 33.0;
+      return (
+        <div className="crypto-dashboard">
+          <div className="stats-grid">
+            <div className="stat-card stat-card-featured">
+              <div className="stat-title">🪙 มูลค่าพอร์ตคริปโตรวมทั้งหมด</div>
+              <div className="stat-value">{hideBalances ? '••••' : `$${allCryptoTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}</div>
+              <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                {hideBalances ? '••••' : `≈ ฿${(allCryptoTotal * rate).toLocaleString(undefined, { maximumFractionDigits: 0 })} THB`}
+              </div>
+              <div className="stat-desc">{cryptoAccs.length} กระเป๋า / Exchange</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-title">🔗 จำนวนกระเป๋า</div>
+              <div className="stat-value">{cryptoAccs.length}</div>
+              <div className="stat-desc">{allCryptoHoldings.length} รายการเหรียญทั้งหมด</div>
+            </div>
+          </div>
+          <div className="section-box" style={{ marginTop: '24px' }}>
+            <div className="section-title">
+              <span>📋 เหรียญทั้งหมดในทุกกระเป๋า (All Holdings)</span>
+              <span className="badge" style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981' }}>{allCryptoHoldings.length} รายการ</span>
+            </div>
+            <div className="table-wrapper">
+              <table className="custom-table">
+                <thead><tr>
+                  <th>กระเป๋า / Exchange</th>
+                  <th>เหรียญ</th>
+                  <th style={{ textAlign: 'right' }}>จำนวน</th>
+                  <th style={{ textAlign: 'right' }}>ราคาล่าสุด</th>
+                  <th style={{ textAlign: 'right' }}>มูลค่า (USD)</th>
+                  <th style={{ textAlign: 'right' }}>มูลค่า (THB)</th>
+                </tr></thead>
+                <tbody>
+                  {allCryptoHoldings.map((h, i) => (
+                    <tr key={i}>
+                      <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{h.account_name}</td>
+                      <td style={{ fontWeight: '700', color: '#10b981' }}>{h.symbol}</td>
+                      <td style={{ textAlign: 'right' }}>{h.balance.toLocaleString(undefined, { maximumFractionDigits: 8 })}</td>
+                      <td style={{ textAlign: 'right' }}>{h.current_price_usd > 0 ? `$${h.current_price_usd.toLocaleString(undefined, { maximumFractionDigits: 6 })}` : '-'}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--accent-secondary)' }}>
+                        {hideBalances ? '••••' : `$${h.value_usd.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                      </td>
+                      <td style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>
+                        {hideBalances ? '••••' : `฿${(h.value_usd * rate).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+                      </td>
+                    </tr>
+                  ))}
+                  {allCryptoHoldings.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>ไม่มีเหรียญในพอร์ต</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div className="section-box" style={{ marginTop: '24px' }}>
+            <div className="section-title">
+              <span>📊 สรุปแต่ละกระเป๋า (Wallet Breakdown)</span>
+              <span className="badge" style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981' }}>{cryptoAccs.length} กระเป๋า</span>
+            </div>
+            <div className="table-wrapper">
+              <table className="custom-table">
+                <thead><tr>
+                  <th>ชื่อกระเป๋า / Exchange</th>
+                  <th>แพลตฟอร์ม</th>
+                  <th style={{ textAlign: 'right' }}>มูลค่า (USD)</th>
+                  <th style={{ textAlign: 'right' }}>มูลค่า (THB)</th>
+                </tr></thead>
+                <tbody>
+                  {cryptoAccs.map(acc => (
+                    <tr key={acc.id}>
+                      <td style={{ fontWeight: '600' }}>{acc.account_name}</td>
+                      <td>{acc.broker_name}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--accent-secondary)' }}>
+                        {hideBalances ? '••••' : `$${acc.equity.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                      </td>
+                      <td style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>
+                        {hideBalances ? '••••' : `฿${(acc.equity * rate).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     const activeAcc = accounts.find(a => a.id.toString() === selectedAccountId);
     if (!activeAcc || activeAcc.account_type !== 'crypto') {
       return (
@@ -2198,10 +2402,14 @@ function App() {
                   const val = e.target.value;
                   setSelectedAccountId(val);
                   if (val === 'all') {
-                    if (activeTab !== 'forex') {
-                      setActiveTab('networth');
-                    }
+                    if (activeTab !== 'forex') setActiveTab('networth');
                     loadAllAccountsCombinedData(accounts.filter(a => !a.account_type || a.account_type === 'forex'));
+                  } else if (val === 'all-stock') {
+                    setSelectedAccountId('all-stock');
+                    loadAllStockData();
+                  } else if (val === 'all-crypto') {
+                    setSelectedAccountId('all-crypto');
+                    loadAllCryptoData();
                   } else {
                     const selectedAcc = accounts.find(a => a.id.toString() === val);
                     if (selectedAcc) {
@@ -2220,7 +2428,13 @@ function App() {
                   <option value="all">📊 สรุปรวมทุกพอร์ต (All Portfolios)</option>
                 )}
                 {accounts.length > 0 && activeTab === 'forex' && (
-                  <option value="all">📊 สรุปรวมทุกพอร์ต (All Forex Portfolios)</option>
+                  <option value="all">📊 สรุปรวมทุกพอร์ต Forex</option>
+                )}
+                {accounts.filter(a => a.account_type === 'stock').length > 1 && activeTab === 'stock' && (
+                  <option value="all-stock">📊 สรุปรวมทุกพอร์ตหุ้น (All Stock Portfolios)</option>
+                )}
+                {accounts.filter(a => a.account_type === 'crypto').length > 1 && activeTab === 'crypto' && (
+                  <option value="all-crypto">📊 สรุปรวมทุกกระเป๋าคริปโต (All Crypto Wallets)</option>
                 )}
                 {accounts
                   .filter(acc => {
