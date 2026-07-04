@@ -340,3 +340,21 @@ class CryptoWallet(Base):
 
     # Relationships
     account = relationship("TradingAccount", back_populates="crypto_wallet")
+
+
+class NetWorthSnapshot(Base):
+    """Daily snapshot of total net worth per user, taken at midnight (Asia/Bangkok)."""
+    __tablename__ = "net_worth_snapshots"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    date = Column(Date, nullable=False, index=True)          # YYYY-MM-DD (Bangkok date)
+    forex_usd = Column(Float, default=0.0, nullable=False)   # Forex total equity (USD)
+    stock_usd = Column(Float, default=0.0, nullable=False)   # Stocks total equity (THB→USD)
+    crypto_usd = Column(Float, default=0.0, nullable=False)  # Crypto total equity (USD)
+    usd_thb_rate = Column(Float, default=33.0, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "date", name="uq_networth_snapshot_user_date"),
+    )

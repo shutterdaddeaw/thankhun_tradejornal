@@ -39,7 +39,10 @@ import {
   CartesianGrid,
   PieChart,
   Pie,
-  Cell
+  Cell,
+  BarChart,
+  Bar,
+  Legend
 } from 'recharts';
 
 const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
@@ -113,7 +116,12 @@ function App() {
   // Net Worth table sort state
   const [nwSortKey, setNwSortKey] = useState('account_name');
   const [nwSortDir, setNwSortDir] = useState('asc');
-  
+  // Net Worth chart state
+  const [nwSnapshots, setNwSnapshots] = useState([]);
+  const [nwChartYear, setNwChartYear] = useState(new Date().getFullYear());
+  const [nwChartMonth, setNwChartMonth] = useState(new Date().getMonth() + 1);
+  const [nwChartLoading, setNwChartLoading] = useState(false);
+
   // Form states for manual additions
   const [newAccType, setNewAccType] = useState('forex'); // forex, stock, crypto
   const [stockSymbol, setStockSymbol] = useState('');
@@ -284,6 +292,21 @@ function App() {
       loadUserData();
     }
   }, [token]);
+
+  // Load net worth snapshots when on networth tab and trigger today's snapshot
+  useEffect(() => {
+    if (page === 'dashboard' && activeTab === 'networth' && token) {
+      triggerNwSnapshot();        // best-effort upsert today
+      loadNwSnapshots(nwChartYear, nwChartMonth);
+    }
+  }, [activeTab, page]);
+
+  // Reload chart when month/year selector changes
+  useEffect(() => {
+    if (page === 'dashboard' && activeTab === 'networth' && token) {
+      loadNwSnapshots(nwChartYear, nwChartMonth);
+    }
+  }, [nwChartYear, nwChartMonth]);
 
   // Copy helper
   const handleCopy = (text) => {
@@ -767,6 +790,35 @@ function App() {
       }
     } catch (e) {
       console.warn('Could not fetch exchange rate, using default 33.0');
+    }
+  };
+
+  const loadNwSnapshots = async (year = nwChartYear, month = nwChartMonth) => {
+    setNwChartLoading(true);
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/v1/networth/snapshots?year=${year}&month=${month}`,
+        { headers: getHeaders() }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setNwSnapshots(data.days || []);
+      }
+    } catch (e) {
+      console.warn('Could not load net worth snapshots');
+    } finally {
+      setNwChartLoading(false);
+    }
+  };
+
+  const triggerNwSnapshot = async () => {
+    try {
+      await fetch(`${API_BASE_URL}/v1/networth/snapshot`, {
+        method: 'POST',
+        headers: getHeaders(),
+      });
+    } catch (e) {
+      // silent — snapshot is best-effort
     }
   };
 
@@ -1855,6 +1907,103 @@ function App() {
             </div>
             <div className="stat-desc">{cryptoAccs.length} ที่อยู่กระเป๋า / Exchange</div>
           </div>
+        </div>
+
+        {/* ── Daily Stacked Column Chart ── */}
+        <div className="section-box" style={{ marginBottom: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
+            <div className="section-title" style={{ margin: 0 }}>📅 สินทรัพย์รายวัน (Daily Net Worth — USD)</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {/* Prev Month */}
+              <button
+                className="btn-secondary"
+                style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '0.85rem' }}
+                onClick={() => {
+                  const m = nwChartMonth === 1 ? 12 : nwChartMonth - 1;
+                  const y = nwChartMonth === 1 ? nwChartYear - 1 : nwChartYear;
+                  setNwChartMonth(m); setNwChartYear(y);
+                }}
+              >‹</button>
+              {/* Month selector */}
+              <select
+                className="account-select"
+                style={{ padding: '4px 10px', fontSize: '0.85rem', minWidth: '110px' }}
+                value={nwChartMonth}
+                onChange={e => setNwChartMonth(Number(e.target.value))}
+              >
+                {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m, i) => (
+                  <option key={i} value={i + 1}>{m}</option>
+                ))}
+              </select>
+              {/* Year selector */}
+              <select
+                className="account-select"
+                style={{ padding: '4px 10px', fontSize: '0.85rem', minWidth: '80px' }}
+                value={nwChartYear}
+                onChange={e => setNwChartYear(Number(e.target.value))}
+              >
+                {[new Date().getFullYear() - 1, new Date().getFullYear()].map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+              {/* Next Month */}
+              <button
+                className="btn-secondary"
+                style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '0.85rem' }}
+                onClick={() => {
+                  const m = nwChartMonth === 12 ? 1 : nwChartMonth + 1;
+                  const y = nwChartMonth === 12 ? nwChartYear + 1 : nwChartYear;
+                  setNwChartMonth(m); setNwChartYear(y);
+                }}
+              >›</button>
+            </div>
+          </div>
+
+          {nwChartLoading ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>⏳ Loading chart...</div>
+          ) : nwSnapshots.filter(d => d.total_usd !== null).length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+              <div style={{ fontSize: '2rem', marginBottom: '8px' }}>📭</div>
+              <div>ยังไม่มีข้อมูล snapshot สำหรับเดือนนี้</div>
+              <div style={{ fontSize: '0.8rem', marginTop: '4px' }}>ระบบจะบันทึกข้อมูลทุกวันเวลาเที่ยงคืน (Asia/Bangkok)</div>
+            </div>
+          ) : (
+            <>
+              <div style={{ width: '100%', height: 280 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={nwSnapshots} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} barCategoryGap="20%">
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
+                    <XAxis
+                      dataKey="day"
+                      tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
+                      axisLine={false}
+                      tickLine={false}
+                      interval={1}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={v => v >= 1000 ? `$${(v/1000).toFixed(0)}k` : `$${v}`}
+                      width={52}
+                    />
+                    <Tooltip
+                      contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '10px', fontSize: '0.83rem' }}
+                      formatter={(value, name) => value != null ? [`$${Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 })}`, name] : ['-', name]}
+                      labelFormatter={label => `Day ${label}`}
+                    />
+                    <Legend
+                      wrapperStyle={{ fontSize: '0.82rem', paddingTop: '12px' }}
+                      formatter={v => <span style={{ color: 'var(--text-secondary)' }}>{v}</span>}
+                    />
+                    <Bar dataKey="forex_usd" name="Forex (USD)" stackId="a" fill="#818cf8" radius={[0, 0, 0, 0]} />
+                    <Bar dataKey="stock_usd" name="Stocks (USD)" stackId="a" fill="#f59e0b" radius={[0, 0, 0, 0]} />
+                    <Bar dataKey="crypto_usd" name="Crypto (USD)" stackId="a" fill="#10b981" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </>
+          )}
         </div>
 
         {/* ── Donut Chart + Sortable Table ── */}
