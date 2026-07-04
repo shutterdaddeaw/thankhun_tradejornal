@@ -20,10 +20,10 @@
 
 ```mermaid
 graph TD
-    MT5[MetaTrader 5 + JornaltradePublisherEA] -- "HTTP POST (Deals & Snapshot)" --> Backend[FastAPI Server (Python)]
-    Backend -- "ORM (SQLAlchemy)" --> DB[(PostgreSQL / SQLite Database)]
-    Frontend[Vite React Dashboard] -- "HTTP Fetch (JSON)" --> Backend
-    User((Traders / Clients)) -- "Web Browser" --> Frontend
+    MT5["MetaTrader 5 + JornaltradePublisherEA"] -->|"HTTP POST Deals and Snapshot"| Backend["FastAPI Server (Python)"]
+    Backend -->|"ORM SQLAlchemy"| DB[("PostgreSQL / SQLite Database")]
+    Frontend["Vite React Dashboard"] -->|"HTTP Fetch JSON"| Backend
+    User(["Traders / Clients"]) -->|"Web Browser"| Frontend
 ```
 
 1.  **Frontend (React + Vite)**: แดชบอร์ดแสดงกราฟ Equity, สถิติ, ปฏิทิน P&L และบทวิเคราะห์ AI

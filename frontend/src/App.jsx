@@ -1743,8 +1743,8 @@ function App() {
     const totalNetWorthTHB = totalNetWorthUSD * rate;
     
     const donutData = [
-      { name: 'Forex (USD)', value: forexUSD, color: 'var(--accent-primary)' },
-      { name: 'Stocks (THB→USD)', value: stockUSD, color: 'var(--accent-secondary)' },
+      { name: 'Forex (USD)', value: forexUSD, color: '#818cf8' },
+      { name: 'Stocks (THB→USD)', value: stockUSD, color: '#f59e0b' },
       { name: 'Crypto (USD)', value: cryptoUSD, color: '#10b981' }
     ].filter(d => d.value > 0);
 
@@ -1801,41 +1801,49 @@ function App() {
           </div>
         </div>
 
-        <div className="combined-summary-grid">
+        {/* Donut Chart + Portfolio Table side-by-side */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '20px', marginTop: '0' }}>
           <div className="section-box" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
             <div className="section-title" style={{ width: '100%' }}>📊 สัดส่วนพอร์ตการลงทุน (Asset Allocation)</div>
             {donutData.length > 0 ? (
-              <div style={{ width: '100%', height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={donutData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={80}
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
-                      {donutData.map((entry, idx) => (
-                        <Cell key={`cell-${idx}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(value) => [`$${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`, 'USD']} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <div style={{ padding: '40px', color: 'var(--text-muted)' }}>ไม่มีข้อมูลแสดงสัดส่วน</div>
-            )}
-            <div style={{ display: 'flex', gap: '16px', marginTop: '12px', flexWrap: 'wrap', justifyContent: 'center' }}>
-              {donutData.map((d, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem' }}>
-                  <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: d.color }} />
-                  <span>{d.name}: {((d.value / (totalNetWorthUSD || 1)) * 100).toFixed(0)}%</span>
+              <>
+                <div style={{ width: '100%', height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={donutData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={80}
+                        outerRadius={120}
+                        paddingAngle={4}
+                        dataKey="value"
+                        strokeWidth={0}
+                      >
+                        {donutData.map((entry, idx) => (
+                          <Cell key={`cell-${idx}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(value) => [`$${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`, 'USD']}
+                        contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px' }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
                 </div>
-              ))}
-            </div>
+                <div style={{ display: 'flex', gap: '20px', marginTop: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                  {donutData.map((d, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.88rem' }}>
+                      <div style={{ width: '14px', height: '14px', borderRadius: '4px', background: d.color, flexShrink: 0 }} />
+                      <span style={{ color: 'var(--text-secondary)' }}>{d.name}</span>
+                      <span style={{ fontWeight: '700', color: d.color }}>{((d.value / (totalNetWorthUSD || 1)) * 100).toFixed(0)}%</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div style={{ padding: '60px', color: 'var(--text-muted)' }}>ไม่มีข้อมูลแสดงสัดส่วน</div>
+            )}
           </div>
 
           <div className="section-box">
@@ -1847,7 +1855,7 @@ function App() {
                     <th>ชื่อพอร์ต (Friendly Name)</th>
                     <th>ประเภทสินทรัพย์</th>
                     <th>โบรกเกอร์ / แพลตฟอร์ม</th>
-                    <th style={{ textAlign: 'right' }}>มูลค่าสุทธิ (Balance)</th>
+                    <th style={{ textAlign: 'right' }}>มูลค่าสุทธิ์ (Balance)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1855,20 +1863,19 @@ function App() {
                     <tr key={acc.id}>
                       <td style={{ fontWeight: '600' }}>{acc.account_name}</td>
                       <td>
-                        <span className={`badge ${acc.account_type === 'stock' ? 'badge-success' : acc.account_type === 'crypto' ? 'badge-secondary' : 'badge-info'}`} style={{ textTransform: 'uppercase', fontSize: '0.75rem' }}>
-                          {acc.account_type || 'Forex'}
+                        <span className={`badge ${acc.account_type === 'stock' ? 'badge-success' : acc.account_type === 'crypto' ? 'badge-secondary' : 'badge-info'}`}
+                          style={{ textTransform: 'uppercase', fontSize: '0.75rem' }}>
+                          {acc.account_type || 'FOREX'}
                         </span>
                       </td>
                       <td>{acc.broker_name}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--accent-secondary)' }}>
+                      <td style={{ textAlign: 'right', fontWeight: 'bold', color: acc.account_type === 'stock' ? '#f59e0b' : acc.account_type === 'crypto' ? '#10b981' : '#818cf8' }}>
                         {hideBalances ? '••••' : `${(isCentCurrency(acc.currency) ? acc.equity / 100 : acc.equity).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${acc.currency}`}
                       </td>
                     </tr>
                   ))}
                   {accounts.length === 0 && (
-                    <tr>
-                      <td colSpan={4} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>ไม่มีพอร์ตการลงทุนในระบบ</td>
-                    </tr>
+                    <tr><td colSpan={4} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>ไม่มีพอร์ตการลงทุนในระบบ</td></tr>
                   )}
                 </tbody>
               </table>
@@ -3324,18 +3331,30 @@ function App() {
                 </button>
                 <button className={`sidebar-item ${activeTab === 'stock' ? 'active' : ''}`} onClick={() => {
                   setActiveTab('stock');
-                  const firstStock = accounts.find(a => a.account_type === 'stock');
-                  if (firstStock) handleAccountSelect(firstStock.id.toString());
-                  else setSelectedAccountId('');
+                  const stockAccs = accounts.filter(a => a.account_type === 'stock');
+                  if (stockAccs.length > 1) {
+                    setSelectedAccountId('all-stock');
+                    loadAllStockData();
+                  } else if (stockAccs.length === 1) {
+                    handleAccountSelect(stockAccs[0].id.toString());
+                  } else {
+                    setSelectedAccountId('');
+                  }
                 }}>
                   <BookOpen size={18} />
                   <span className="sidebar-item-text">🇹🇭 พอร์ตหุ้นไทย/ตปท. (Stock)</span>
                 </button>
                 <button className={`sidebar-item ${activeTab === 'crypto' ? 'active' : ''}`} onClick={() => {
                   setActiveTab('crypto');
-                  const firstCrypto = accounts.find(a => a.account_type === 'crypto');
-                  if (firstCrypto) handleAccountSelect(firstCrypto.id.toString());
-                  else setSelectedAccountId('');
+                  const cryptoAccs = accounts.filter(a => a.account_type === 'crypto');
+                  if (cryptoAccs.length > 1) {
+                    setSelectedAccountId('all-crypto');
+                    loadAllCryptoData();
+                  } else if (cryptoAccs.length === 1) {
+                    handleAccountSelect(cryptoAccs[0].id.toString());
+                  } else {
+                    setSelectedAccountId('');
+                  }
                 }}>
                   <Wallet size={18} />
                   <span className="sidebar-item-text">🪙 พอร์ตคริปโต (Crypto)</span>
