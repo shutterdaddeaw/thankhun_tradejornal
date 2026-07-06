@@ -55,11 +55,21 @@ def create_account(
     if account_in.investor_password:
         encrypted_pw = encrypt_password(account_in.investor_password)
 
+    # Encrypt Webull credentials if provided
+    webull_key_enc = None
+    webull_secret_enc = None
+    if account_in.webull_app_key:
+        webull_key_enc = encrypt_password(account_in.webull_app_key)
+    if account_in.webull_app_secret:
+        webull_secret_enc = encrypt_password(account_in.webull_app_secret)
+
     # Create credentials entry
     db_creds = AccountCredentials(
         account_id=db_account.id,
         investor_password_encrypted=encrypted_pw,
-        publisher_token=pub_token
+        publisher_token=pub_token,
+        webull_app_key_encrypted=webull_key_enc,
+        webull_app_secret_encrypted=webull_secret_enc
     )
     db.add(db_creds)
 
@@ -76,6 +86,7 @@ def create_account(
     # Embed the publisher token into response so user can configure the EA
     response = TradingAccountResponse.model_validate(db_account)
     response.publisher_token = pub_token
+    response.has_webull_keys = bool(webull_key_enc and webull_secret_enc)
     return response
 
 
@@ -93,6 +104,7 @@ def get_accounts(
         # Include token from credentials if it exists
         if acc.credentials:
             resp.publisher_token = acc.credentials.publisher_token
+            resp.has_webull_keys = bool(acc.credentials.webull_app_key_encrypted and acc.credentials.webull_app_secret_encrypted)
         response_list.append(resp)
         
     return response_list
@@ -116,6 +128,7 @@ def get_account(
     resp = TradingAccountResponse.model_validate(account)
     if account.credentials:
         resp.publisher_token = account.credentials.publisher_token
+        resp.has_webull_keys = bool(account.credentials.webull_app_key_encrypted and account.credentials.webull_app_secret_encrypted)
     return resp
 
 
@@ -142,6 +155,16 @@ def update_account(
         if pw:
             account.credentials.investor_password_encrypted = encrypt_password(pw)
             
+    if "webull_app_key" in update_data:
+        w_key = update_data.pop("webull_app_key")
+        if w_key:
+            account.credentials.webull_app_key_encrypted = encrypt_password(w_key)
+            
+    if "webull_app_secret" in update_data:
+        w_secret = update_data.pop("webull_app_secret")
+        if w_secret:
+            account.credentials.webull_app_secret_encrypted = encrypt_password(w_secret)
+
     for field, val in update_data.items():
         setattr(account, field, val)
         
@@ -151,6 +174,7 @@ def update_account(
     resp = TradingAccountResponse.model_validate(account)
     if account.credentials:
         resp.publisher_token = account.credentials.publisher_token
+        resp.has_webull_keys = bool(account.credentials.webull_app_key_encrypted and account.credentials.webull_app_secret_encrypted)
     return resp
 
 

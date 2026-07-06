@@ -177,6 +177,11 @@ function App() {
   const [newAccLeverage, setNewAccLeverage] = useState('100');
   const [newAccConnType, setNewAccConnType] = useState('publisher_ea');
   const [newAccPassword, setNewAccPassword] = useState('');
+  const [newWebullAppKey, setNewWebullAppKey] = useState('');
+  const [newWebullAppSecret, setNewWebullAppSecret] = useState('');
+  const [editWebullAppKey, setEditWebullAppKey] = useState('');
+  const [editWebullAppSecret, setEditWebullAppSecret] = useState('');
+  const [isSyncingWebull, setIsSyncingWebull] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [googleClientId, setGoogleClientId] = useState('');
 
@@ -676,6 +681,29 @@ function App() {
       }
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const syncWebullData = async (accountId) => {
+    setIsSyncingWebull(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/v1/stock/accounts/${accountId}/sync-webull`, {
+        method: 'POST',
+        headers: getHeaders()
+      });
+      if (res.ok) {
+        await loadStockData(accountId);
+        await loadAccounts();
+        alert("ดึงข้อมูลพอร์ตหุ้นจาก Webull API สำเร็จแล้ว!");
+      } else {
+        const err = await res.json();
+        alert(`ไม่สามารถเชื่อมต่อ Webull API ได้: ${err.detail || 'โปรดตรวจสอบความถูกต้องของกุญแจ API'}`);
+      }
+    } catch (e) {
+      console.error(e);
+      alert("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+    } finally {
+      setIsSyncingWebull(false);
     }
   };
 
@@ -1222,20 +1250,24 @@ function App() {
     e.preventDefault();
     setErrorMsg('');
     try {
+      const payload = {
+        account_number: newAccNumber,
+        broker_name: newAccBroker,
+        server_name: newAccServer || "",
+        account_name: newAccName,
+        currency: newAccCurrency,
+        account_type: newAccType,
+        leverage: parseInt(newAccLeverage) || 100,
+        connection_type: newAccConnType,
+        investor_password: newAccPassword || null,
+        webull_app_key: newAccType === 'stock' && newAccConnType === 'webull_api' ? newWebullAppKey : null,
+        webull_app_secret: newAccType === 'stock' && newAccConnType === 'webull_api' ? newWebullAppSecret : null,
+      };
+
       const res = await fetch(`${API_BASE_URL}/v1/accounts/`, {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({
-          account_number: newAccNumber,
-          broker_name: newAccBroker,
-          server_name: newAccServer || "",
-          account_name: newAccName,
-          currency: newAccCurrency,
-          account_type: newAccType,
-          leverage: parseInt(newAccLeverage) || 100,
-          connection_type: newAccConnType,
-          investor_password: newAccPassword || null
-        })
+        body: JSON.stringify(payload)
       });
 
       if (res.ok) {
@@ -1247,13 +1279,15 @@ function App() {
         setNewAccServer('');
         setNewAccName('');
         setNewAccPassword('');
+        setNewWebullAppKey('');
+        setNewWebullAppSecret('');
         
         // Show guide modal only for Forex (MT5)
         if (newAccType === 'forex') {
           setActiveGuideToken(data.publisher_token);
           setShowGuideModal(true);
         } else {
-          alert(`เพิ่มพอร์ต ${newAccType === 'stock' ? 'หุ้นไทย' : 'คริปโต'} สำเร็จเรียบร้อยแล้ว`);
+          alert(`เพิ่มพอร์ต ${newAccType === 'stock' ? 'หุ้น' : 'คริปโต'} สำเร็จเรียบร้อยแล้ว`);
         }
         
         // Refresh
@@ -2209,6 +2243,18 @@ function App() {
       );
     }
 
+    const rate = usdThbRate || 33.0;
+    const isUSD = activeAcc.currency === 'USD';
+    const isWebull = activeAcc.connection_type === 'webull_api';
+
+    const formatCurrency = (val, forceTHB = false) => {
+      if (isUSD && !forceTHB) {
+        return `$${val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`;
+      }
+      const thbVal = isUSD ? val * rate : val;
+      return `฿${thbVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} THB`;
+    };
+
     const stockHoldingsValue = stockHoldings.reduce((sum, h) => sum + (h.volume * h.current_price), 0);
     const totalAccountValue = stockHoldingsValue + stockCash;
     const totalUnrealizedPnL = stockHoldings.reduce((sum, h) => sum + h.pnl, 0);
@@ -2216,48 +2262,76 @@ function App() {
     return (
       <div className="stock-dashboard">
         <div className="stats-grid">
-          <div className="stat-card stat-card-featured">
+          <div className="stat-card stat-card-featured" style={{ position: 'relative' }}>
+            {isWebull && (
+              <span className="badge" style={{ position: 'absolute', top: '12px', right: '12px', background: 'rgba(16,185,129,0.15)', color: 'var(--success)', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                🔌 Webull API
+              </span>
+            )}
             <div className="stat-title">💼 มูลค่าพอร์ตหุ้นทั้งหมด (Total Value)</div>
             <div className="stat-value">
-              {hideBalances ? '••••' : `${totalAccountValue.toLocaleString(undefined, { minimumFractionDigits: 2 })} THB`}
+              {hideBalances ? '••••' : formatCurrency(totalAccountValue)}
             </div>
-            <div className="stat-desc">เงินสด + มูลค่าหุ้นที่ถือครอง</div>
+            <div className="stat-desc">
+              {isUSD ? `≈ ${formatCurrency(totalAccountValue, true)}` : 'เงินสด + มูลค่าหุ้นที่ถือครอง'}
+            </div>
           </div>
 
           <div className="stat-card">
             <div className="stat-title">💵 เงินสดคงเหลือ (Cash Balance)</div>
             <div className="stat-value">
-              {hideBalances ? '••••' : `${stockCash.toLocaleString(undefined, { minimumFractionDigits: 2 })} THB`}
+              {hideBalances ? '••••' : formatCurrency(stockCash)}
             </div>
-            <form onSubmit={handleUpdateStockCash} style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-              <input 
-                type="number" 
-                step="0.01"
-                className="form-input" 
-                style={{ padding: '4px 8px', fontSize: '0.8rem', height: '28px' }} 
-                value={editStockCashValue} 
-                onChange={(e) => setEditStockCashValue(e.target.value)} 
-              />
-              <button type="submit" className="btn-secondary" style={{ padding: '0 8px', height: '28px', fontSize: '0.8rem', width: 'auto' }}>อัปเดต</button>
-            </form>
+            {isUSD && (
+              <div className="stat-desc" style={{ marginBottom: isWebull ? '12px' : '4px' }}>
+                {isUSD ? `≈ ${formatCurrency(stockCash, true)}` : ''}
+              </div>
+            )}
+            {isWebull ? (
+              <button 
+                onClick={() => syncWebullData(activeAcc.id)} 
+                disabled={isSyncingWebull} 
+                className="btn-primary" 
+                style={{ padding: '4px 10px', fontSize: '0.8rem', height: '28px', width: 'auto', display: 'flex', alignItems: 'center', gap: '6px', borderRadius: '6px' }}
+              >
+                {isSyncingWebull ? '⏳ ซิงค์ข้อมูล...' : '🔄 ซิงค์ Webull API'}
+              </button>
+            ) : (
+              <form onSubmit={handleUpdateStockCash} style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                <input 
+                  type="number" 
+                  step="0.01"
+                  className="form-input" 
+                  style={{ padding: '4px 8px', fontSize: '0.8rem', height: '28px' }} 
+                  value={editStockCashValue} 
+                  onChange={(e) => setEditStockCashValue(e.target.value)} 
+                />
+                <button type="submit" className="btn-secondary" style={{ padding: '0 8px', height: '28px', fontSize: '0.8rem', width: 'auto' }}>อัปเดต</button>
+              </form>
+            )}
           </div>
 
           <div className="stat-card">
             <div className="stat-title">📈 มูลค่าหุ้นถือครอง (Market Value)</div>
             <div className="stat-value">
-              {hideBalances ? '••••' : `${stockHoldingsValue.toLocaleString(undefined, { minimumFractionDigits: 2 })} THB`}
+              {hideBalances ? '••••' : formatCurrency(stockHoldingsValue)}
             </div>
-            <div className="stat-desc">ราคาล่าสุดอิงตลาดหลักทรัพย์ (SET)</div>
+            <div className="stat-desc">
+              {isUSD ? `≈ ${formatCurrency(stockHoldingsValue, true)}` : 'ราคาล่าสุดอิงตลาดหลักทรัพย์ (SET)'}
+            </div>
           </div>
 
           <div className="stat-card">
             <div className="stat-title">🟢 กำไรที่ยังไม่เกิดขึ้น (Unrealized PnL)</div>
             <div className="stat-value" style={{ color: totalUnrealizedPnL >= 0 ? 'var(--success)' : 'var(--error)' }}>
-              {hideBalances ? '••••' : `${totalUnrealizedPnL >= 0 ? '+' : ''}${totalUnrealizedPnL.toLocaleString(undefined, { minimumFractionDigits: 2 })} THB`}
+              {hideBalances ? '••••' : `${totalUnrealizedPnL >= 0 ? '+' : ''}${formatCurrency(totalUnrealizedPnL)}`}
             </div>
-            <div className="stat-desc">กำไร/ขาดทุนทางบัญชีล่าสุด</div>
+            <div className="stat-desc">
+              {isUSD ? `≈ ${formatCurrency(totalUnrealizedPnL, true)}` : 'กำไร/ขาดทุนทางบัญชีล่าสุด'}
+            </div>
           </div>
         </div>
+
 
         {selectedStock && stockCandles.length > 0 && (
           <div className="candle-chart-container">
@@ -2303,13 +2377,13 @@ function App() {
                     <th style={{ textAlign: 'right' }}>ทุนเฉลี่ย</th>
                     <th style={{ textAlign: 'right' }}>ราคาตลาด</th>
                     <th style={{ textAlign: 'right' }}>PnL</th>
-                    <th>ลบ</th>
+                    {!isWebull && <th>ลบ</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {stockHoldings.map(h => (
                     <tr key={h.id}>
-                      <td style={{ fontWeight: '600', color: 'var(--accent-secondary)', cursor: 'pointer' }} onClick={() => loadStockCandles(h.symbol)}>
+                      <td style={{ fontWeight: '600', color: 'var(--accent-secondary)', cursor: 'pointer' }} onClick={() => loadStockCandles(h.symbol, activeAcc.currency)}>
                         🔍 {h.symbol}
                       </td>
                       <td style={{ textAlign: 'right' }}>{h.volume.toLocaleString()}</td>
@@ -2318,16 +2392,18 @@ function App() {
                       <td style={{ textAlign: 'right', fontWeight: 'bold', color: h.pnl >= 0 ? 'var(--success)' : 'var(--error)' }}>
                         {h.pnl >= 0 ? '+' : ''}{h.pnl.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
-                      <td>
-                        <button className="btn-logout" onClick={() => handleDeleteStockHolding(h.id)} style={{ padding: '6px' }}>
-                          <Trash2 size={12} />
-                        </button>
-                      </td>
+                      {!isWebull && (
+                        <td>
+                          <button className="btn-logout" onClick={() => handleDeleteStockHolding(h.id)} style={{ padding: '6px' }}>
+                            <Trash2 size={12} />
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   ))}
                   {stockHoldings.length === 0 && (
                     <tr>
-                      <td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>ไม่มีรายการหุ้นในพอร์ต</td>
+                      <td colSpan={isWebull ? 5 : 6} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>ไม่มีรายการหุ้นในพอร์ต</td>
                     </tr>
                   )}
                 </tbody>
@@ -2336,35 +2412,48 @@ function App() {
           </div>
 
           <div className="section-box">
-            <div className="section-title">✍️ บันทึกธุรกรรม (Log Trade)</div>
-            <form onSubmit={handleAddStockTrade} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div className="form-group">
-                <label className="form-label">ชื่อหุ้น (Symbol เช่น PTT)</label>
-                <input type="text" className="form-input" required value={stockSymbol} onChange={(e) => setStockSymbol(e.target.value)} />
+            {isWebull ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: '260px', color: 'var(--text-muted)', textAlign: 'center', padding: '20px' }}>
+                <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>🔌</div>
+                <h4 style={{ color: '#fff', marginBottom: '8px', fontSize: '1.05rem' }}>บัญชีเชื่อมต่อ Webull API</h4>
+                <p style={{ fontSize: '0.85rem', lineHeight: '1.5', maxWidth: '320px', margin: '0 auto' }}>
+                  ข้อมูลรายการซื้อขายและหุ้นที่ถือครองจะถูกดึงและอัปเดตแบบอัตโนมัติจากบัญชี Webull ของท่านโดยตรง ไม่จำเป็นต้องบันทึกรายการเทรดด้วยตนเอง
+                </p>
               </div>
-              <div className="form-group">
-                <label className="form-label">ประเภท</label>
-                <select className="form-input" value={stockAction} onChange={(e) => setStockAction(e.target.value)}>
-                  <option value="BUY">ซื้อ (BUY)</option>
-                  <option value="SELL">ขาย (SELL)</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">จำนวนหุ้น</label>
-                <input type="number" className="form-input" required value={stockVolume} onChange={(e) => setStockVolume(e.target.value)} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">ราคาต่อหุ้น</label>
-                <input type="number" step="0.01" className="form-input" required value={stockPrice} onChange={(e) => setStockPrice(e.target.value)} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">หมายเหตุ</label>
-                <input type="text" className="form-input" value={stockReason} onChange={(e) => setStockReason(e.target.value)} />
-              </div>
-              <button type="submit" className="btn-primary" style={{ marginTop: '8px' }}>บันทึกรายการ</button>
-            </form>
+            ) : (
+              <>
+                <div className="section-title">✍️ บันทึกธุรกรรม (Log Trade)</div>
+                <form onSubmit={handleAddStockTrade} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div className="form-group">
+                    <label className="form-label">ชื่อหุ้น (Symbol เช่น PTT)</label>
+                    <input type="text" className="form-input" required value={stockSymbol} onChange={(e) => setStockSymbol(e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">ประเภท</label>
+                    <select className="form-input" value={stockAction} onChange={(e) => setStockAction(e.target.value)}>
+                      <option value="BUY">ซื้อ (BUY)</option>
+                      <option value="SELL">ขาย (SELL)</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">จำนวนหุ้น</label>
+                    <input type="number" className="form-input" required value={stockVolume} onChange={(e) => setStockVolume(e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">ราคาต่อหุ้น</label>
+                    <input type="number" step="0.01" className="form-input" required value={stockPrice} onChange={(e) => setStockPrice(e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">หมายเหตุ</label>
+                    <input type="text" className="form-input" value={stockReason} onChange={(e) => setStockReason(e.target.value)} />
+                  </div>
+                  <button type="submit" className="btn-primary" style={{ marginTop: '8px' }}>บันทึกรายการ</button>
+                </form>
+              </>
+            )}
           </div>
         </div>
+
 
         <div className="section-box" style={{ marginTop: '24px' }}>
           <div className="section-title">📜 ประวัติธุรกรรมการซื้อขายหุ้น (Stock Trade Logs)</div>
@@ -3625,9 +3714,11 @@ function App() {
               <div className="form-group">
                 <label className="form-label">ประเภทพอร์ต (Asset Class)</label>
                 <select className="form-input" value={newAccType} onChange={(e) => {
-                  setNewAccType(e.target.value);
-                  setNewAccCurrency(e.target.value === 'stock' ? 'THB' : 'USD');
-                  setNewAccBroker(e.target.value === 'stock' ? 'SET' : e.target.value === 'crypto' ? 'Binance' : '');
+                  const val = e.target.value;
+                  setNewAccType(val);
+                  setNewAccCurrency(val === 'stock' ? 'THB' : 'USD');
+                  setNewAccBroker(val === 'stock' ? 'SET' : val === 'crypto' ? 'Binance' : '');
+                  setNewAccConnType(val === 'forex' ? 'publisher_ea' : 'manual');
                 }}>
                   <option value="forex"> Forex (MT5 EA Connection)</option>
                   <option value="stock">🇹🇭 พอร์ตหุ้นไทย/ตปท. (Stock)</option>
@@ -3640,29 +3731,81 @@ function App() {
                 <input type="text" className="form-input" placeholder={newAccType === 'stock' ? "เช่น พอร์ตหุ้นหลักรับปันผล" : newAccType === 'crypto' ? "เช่น กระเป๋า MetaMask" : "เช่น Gold EA Scalper"} required value={newAccName} onChange={(e) => setNewAccName(e.target.value)} />
               </div>
 
-              <div className="sections-grid" style={{ gap: '16px', marginBottom: 0 }}>
+              {newAccType === 'stock' && (
                 <div className="form-group">
-                  <label className="form-label">{newAccType === 'crypto' ? 'ที่อยู่กระเป๋า (Wallet / Exchange Name)' : 'เลขบัญชี (Account Number / Login ID)'}</label>
-                  <input type="text" className="form-input" placeholder={newAccType === 'crypto' ? "เช่น 0x71C... หรือ Binance" : "เช่น 50821039"} required value={newAccNumber} onChange={(e) => setNewAccNumber(e.target.value)} />
+                  <label className="form-label">รูปแบบการเชื่อมโยง (Sync Method)</label>
+                  <select className="form-input" value={newAccConnType} onChange={(e) => {
+                    const connType = e.target.value;
+                    setNewAccConnType(connType);
+                    if (connType === 'webull_api') {
+                      setNewAccCurrency('USD');
+                      setNewAccBroker('Webull');
+                    } else {
+                      setNewAccCurrency('THB');
+                      setNewAccBroker('SET');
+                    }
+                  }}>
+                    <option value="manual">Manual (กรอกข้อมูลเอง)</option>
+                    <option value="webull_api">🔌 Webull API (เชื่อมโยงอัตโนมัติ)</option>
+                  </select>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">สกุลเงินหลัก (Currency)</label>
-                  <input type="text" className="form-input" placeholder="USD" required value={newAccCurrency} onChange={(e) => setNewAccCurrency(e.target.value)} />
-                </div>
-              </div>
+              )}
 
-              <div className="sections-grid" style={{ gap: '16px', marginBottom: 0 }}>
-                <div className="form-group">
-                  <label className="form-label">{newAccType === 'stock' ? 'ตลาดหลักทรัพย์ / โบรคเกอร์' : newAccType === 'crypto' ? 'โบรคเกอร์ / กระเป๋า' : 'โบรกเกอร์ (Broker Company)'}</label>
-                  <input type="text" className="form-input" placeholder={newAccType === 'stock' ? "เช่น SET หรือ InnovestX" : newAccType === 'crypto' ? "เช่น Binance, Solana" : "เช่น Exness"} required value={newAccBroker} onChange={(e) => setNewAccBroker(e.target.value)} />
-                </div>
-                {newAccType === 'forex' && (
-                  <div className="form-group">
-                    <label className="form-label">ชื่อเซิร์ฟเวอร์ (Server Name)</label>
-                    <input type="text" className="form-input" placeholder="เช่น Exness-MT5-Real10" required value={newAccServer} onChange={(e) => setNewAccServer(e.target.value)} />
+              {/* Conditionally render inputs for Webull Stock Account */}
+              {newAccType === 'stock' && newAccConnType === 'webull_api' ? (
+                <>
+                  <div className="sections-grid" style={{ gap: '16px', marginBottom: 0 }}>
+                    <div className="form-group">
+                      <label className="form-label">Webull App Key</label>
+                      <input type="text" className="form-input" placeholder="ป้อน Webull App Key ที่ได้รับจากเว็บพอร์ทัล" required value={newWebullAppKey} onChange={(e) => setNewWebullAppKey(e.target.value)} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Webull App Secret</label>
+                      <input type="password" className="form-input" placeholder="ป้อน Webull App Secret" required value={newWebullAppSecret} onChange={(e) => setNewWebullAppSecret(e.target.value)} />
+                    </div>
                   </div>
-                )}
-              </div>
+
+                  <div className="sections-grid" style={{ gap: '16px', marginBottom: 0 }}>
+                    <div className="form-group">
+                      <label className="form-label">เลขบัญชี Webull (Account ID / Number)</label>
+                      <input type="text" className="form-input" placeholder="ป้อนเลขบัญชี หรือปล่อยว่างให้ระบบอิงบัญชีหลักอัตโนมัติ" value={newAccNumber} onChange={(e) => setNewAccNumber(e.target.value)} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">สกุลเงินหลัก (Currency)</label>
+                      <select className="form-input" value={newAccCurrency} onChange={(e) => setNewAccCurrency(e.target.value)}>
+                        <option value="USD">USD (หุ้นต่างประเทศ)</option>
+                        <option value="THB">THB (หุ้นไทย)</option>
+                      </select>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="sections-grid" style={{ gap: '16px', marginBottom: 0 }}>
+                    <div className="form-group">
+                      <label className="form-label">{newAccType === 'crypto' ? 'ที่อยู่กระเป๋า (Wallet / Exchange Name)' : 'เลขบัญชี (Account Number / Login ID)'}</label>
+                      <input type="text" className="form-input" placeholder={newAccType === 'crypto' ? "เช่น 0x71C... หรือ Binance" : "เช่น 50821039"} required value={newAccNumber} onChange={(e) => setNewAccNumber(e.target.value)} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">สกุลเงินหลัก (Currency)</label>
+                      <input type="text" className="form-input" placeholder="USD" required value={newAccCurrency} onChange={(e) => setNewAccCurrency(e.target.value)} />
+                    </div>
+                  </div>
+
+                  <div className="sections-grid" style={{ gap: '16px', marginBottom: 0 }}>
+                    <div className="form-group">
+                      <label className="form-label">{newAccType === 'stock' ? 'ตลาดหลักทรัพย์ / โบรคเกอร์' : newAccType === 'crypto' ? 'โบรคเกอร์ / กระเป๋า' : 'โบรกเกอร์ (Broker Company)'}</label>
+                      <input type="text" className="form-input" placeholder={newAccType === 'stock' ? "เช่น SET หรือ InnovestX" : newAccType === 'crypto' ? "เช่น Binance, Solana" : "เช่น Exness"} required value={newAccBroker} onChange={(e) => setNewAccBroker(e.target.value)} />
+                    </div>
+                    {newAccType === 'forex' && (
+                      <div className="form-group">
+                        <label className="form-label">ชื่อเซิร์ฟเวอร์ (Server Name)</label>
+                        <input type="text" className="form-input" placeholder="เช่น Exness-MT5-Real10" required value={newAccServer} onChange={(e) => setNewAccServer(e.target.value)} />
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
 
               {newAccType === 'forex' && (
                 <>
@@ -3688,6 +3831,7 @@ function App() {
                   )}
                 </>
               )}
+
 
               <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
                 <button type="submit" className="btn-primary">บันทึกบัญชี</button>

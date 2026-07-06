@@ -58,6 +58,8 @@ class TradingAccountBase(BaseModel):
 
 class TradingAccountCreate(TradingAccountBase):
     investor_password: Optional[str] = None
+    webull_app_key: Optional[str] = None
+    webull_app_secret: Optional[str] = None
 
 class TradingAccountUpdate(BaseModel):
     account_name: Optional[str] = None
@@ -68,6 +70,8 @@ class TradingAccountUpdate(BaseModel):
     status: Optional[str] = None
     connection_type: Optional[str] = None
     investor_password: Optional[str] = None
+    webull_app_key: Optional[str] = None
+    webull_app_secret: Optional[str] = None
 
 class TradingAccountResponse(TradingAccountBase):
     id: int
@@ -77,6 +81,7 @@ class TradingAccountResponse(TradingAccountBase):
     profit: float
     status: str
     publisher_token: Optional[str] = None  # Returned to authorize EA setup
+    has_webull_keys: Optional[bool] = False
     created_at: datetime
     updated_at: datetime
 

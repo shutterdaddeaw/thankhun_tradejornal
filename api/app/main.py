@@ -8,6 +8,32 @@ from fastapi.staticfiles import StaticFiles
 import os
 import logging
 
+# Dynamic check to add missing columns to account_credentials
+try:
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        # Check columns of account_credentials
+        if engine.name == "sqlite":
+            res = conn.execute(text("PRAGMA table_info(account_credentials)"))
+            columns = [row[1] for row in res.fetchall()]
+        else: # PostgreSQL
+            res = conn.execute(text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name='account_credentials'"
+            ))
+            columns = [row[0] for row in res.fetchall()]
+            
+        if "webull_app_key_encrypted" not in columns:
+            conn.execute(text("ALTER TABLE account_credentials ADD COLUMN webull_app_key_encrypted VARCHAR(255) NULL"))
+            conn.commit()
+            print("Successfully added webull_app_key_encrypted column")
+        if "webull_app_secret_encrypted" not in columns:
+            conn.execute(text("ALTER TABLE account_credentials ADD COLUMN webull_app_secret_encrypted VARCHAR(255) NULL"))
+            conn.commit()
+            print("Successfully added webull_app_secret_encrypted column")
+except Exception as e:
+    print(f"Error applying dynamic schema migrations: {e}")
+
 # Auto-create tables on startup (especially useful for SQLite local development)
 Base.metadata.create_all(bind=engine)
 

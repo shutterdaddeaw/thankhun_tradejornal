@@ -11,8 +11,10 @@ from app.models.models import User
 
 router = APIRouter()
 
-def format_symbol(symbol: str) -> str:
+def format_symbol(symbol: str, currency: str = "THB") -> str:
     sym = symbol.strip().upper()
+    if currency == "USD":
+        return sym
     if not sym.endswith(".BK") and "." not in sym:
         return f"{sym}.BK"
     return sym
@@ -114,7 +116,10 @@ def upsert_holding(
     if not account:
         raise HTTPException(status_code=404, detail="Stock account not found")
 
-    symbol = format_symbol(payload.get("symbol", ""))
+    if account.connection_type == "webull_api":
+        raise HTTPException(status_code=400, detail="Cannot manually edit holdings on a Webull API-connected account.")
+
+    symbol = format_symbol(payload.get("symbol", ""), account.currency)
     if not symbol:
         raise HTTPException(status_code=400, detail="Symbol is required")
         
@@ -169,6 +174,9 @@ def delete_holding(
     ).first()
     if not account:
         raise HTTPException(status_code=404, detail="Stock account not found")
+
+    if account.connection_type == "webull_api":
+        raise HTTPException(status_code=400, detail="Cannot manually delete holdings on a Webull API-connected account.")
 
     holding = db.query(StockHolding).filter(
         StockHolding.id == holding_id,
@@ -229,7 +237,10 @@ def add_trade(
     if not account:
         raise HTTPException(status_code=404, detail="Stock account not found")
 
-    symbol = format_symbol(payload.get("symbol", ""))
+    if account.connection_type == "webull_api":
+        raise HTTPException(status_code=400, detail="Cannot manually add trades to a Webull API-connected account.")
+
+    symbol = format_symbol(payload.get("symbol", ""), account.currency)
     action = payload.get("action", "").upper()  # BUY, SELL
     volume = int(payload.get("volume", 0))
     price = float(payload.get("price", 0.0))
@@ -337,6 +348,9 @@ def update_cash(
     if not account:
         raise HTTPException(status_code=404, detail="Stock account not found")
 
+    if account.connection_type == "webull_api":
+        raise HTTPException(status_code=400, detail="Cannot manually update cash on a Webull API-connected account.")
+
     amount = float(payload.get("cash_balance", 0.0))
     cash = db.query(StockCashBalance).filter(StockCashBalance.account_id == account_id).first()
     
@@ -353,10 +367,10 @@ def update_cash(
 
 
 @router.get("/candles/{symbol}")
-def get_stock_candles(symbol: str) -> Any:
+def get_stock_candles(symbol: str, currency: str = "THB") -> Any:
     """Fetch historical candlestick data for the given stock symbol from Yahoo Finance."""
     try:
-        sym = format_symbol(symbol)
+        sym = format_symbol(symbol, currency)
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?range=6mo&interval=1d"
         headers = {"User-Agent": "Mozilla/5.0"}
         res = requests.get(url, headers=headers, timeout=5)
@@ -395,3 +409,118 @@ def get_stock_candles(symbol: str) -> Any:
         return candles
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch historical chart: {str(e)}")
+
+
+@router.post("/accounts/{account_id}/sync-webull")
+def sync_webull_account(
+    account_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """Sync holdings and cash balance from Webull API."""
+    account = db.query(TradingAccount).filter(
+        TradingAccount.id == account_id,
+        TradingAccount.user_id == current_user.id
+    ).first()
+    if not account:
+        raise HTTPException(status_code=404, detail="Stock account not found")
+
+    if account.connection_type != "webull_api":
+        raise HTTPException(status_code=400, detail="This account is not configured for Webull API")
+
+    creds = account.credentials
+    if not creds or not creds.webull_app_key_encrypted or not creds.webull_app_secret_encrypted:
+        raise HTTPException(status_code=400, detail="Webull credentials not configured")
+
+    from app.core.security import decrypt_password
+    from app.services.webull_client import WebullRestClient
+
+    try:
+        app_key = decrypt_password(creds.webull_app_key_encrypted)
+        app_secret = decrypt_password(creds.webull_app_secret_encrypted)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Failed to decrypt Webull credentials")
+
+    region = "us" if account.currency == "USD" else "th"
+    
+    try:
+        client = WebullRestClient(app_key, app_secret, region=region)
+        
+        # 1. Fetch Webull account ID
+        accounts_data = client.get_account_list()
+        if not accounts_data:
+            raise Exception("No Webull accounts found under these credentials")
+            
+        webull_acc_id = None
+        for wa in accounts_data:
+            acc_num = wa.get("account_number") or wa.get("account_id")
+            if acc_num == account.account_number:
+                webull_acc_id = wa.get("account_id")
+                break
+        
+        if not webull_acc_id:
+            # Fallback to first account
+            webull_acc_id = accounts_data[0].get("account_id")
+            if account.account_number in ("123456", "Combined", "all-stock", ""):
+                account.account_number = str(webull_acc_id)
+
+        # 2. Get Balance (to get cash balance and total equity)
+        balance_data = client.get_account_balance(webull_acc_id)
+        cash_val = balance_data.get("cash_balance")
+        if cash_val is None:
+            cash_val = balance_data.get("cash")
+        if cash_val is None:
+            cash_val = balance_data.get("buying_power", 0.0)
+            
+        cash_val = float(cash_val)
+
+        # 3. Get Positions (holdings)
+        positions_data = client.get_account_positions(webull_acc_id)
+
+        # 4. Overwrite StockCashBalance
+        cash_row = db.query(StockCashBalance).filter(StockCashBalance.account_id == account_id).first()
+        if cash_row:
+            cash_row.cash_balance = cash_val
+            cash_row.updated_at = datetime.utcnow()
+        else:
+            cash_row = StockCashBalance(account_id=account_id, cash_balance=cash_val)
+            db.add(cash_row)
+
+        # 5. Overwrite holdings (delete old, add new)
+        db.query(StockHolding).filter(StockHolding.account_id == account_id).delete()
+
+        for pos in positions_data:
+            sym = pos.get("symbol")
+            if not sym:
+                continue
+                
+            qty = float(pos.get("quantity") or pos.get("volume") or 0.0)
+            if qty <= 0:
+                continue
+                
+            cost = float(pos.get("cost_price") or pos.get("avg_price") or pos.get("avg_cost") or 0.0)
+            curr_price = float(pos.get("last_price") or pos.get("current_price") or pos.get("close_price") or cost)
+            
+            sym = format_symbol(sym, account.currency)
+            pnl = (curr_price - cost) * qty
+            
+            holding = StockHolding(
+                account_id=account_id,
+                symbol=sym,
+                volume=qty,
+                avg_price=cost,
+                current_price=curr_price,
+                pnl=pnl
+            )
+            db.add(holding)
+
+        db.commit()
+        
+        # 6. Recalculate total account value
+        recalculate_stock_account_value(account_id, db)
+        
+        return {"status": "success", "message": f"Successfully synced Webull account {webull_acc_id}"}
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Webull Sync Error: {str(e)}")
