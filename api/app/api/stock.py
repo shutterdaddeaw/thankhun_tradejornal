@@ -432,7 +432,7 @@ def sync_webull_account(
     if not creds or not creds.webull_app_key_encrypted or not creds.webull_app_secret_encrypted:
         raise HTTPException(status_code=400, detail="Webull credentials not configured")
 
-    from app.core.security import decrypt_password
+    from app.core.security import decrypt_password, encrypt_password
     from app.services.webull_client import WebullRestClient
 
     try:
@@ -444,12 +444,44 @@ def sync_webull_account(
     region = account.server_name.strip().lower() if (account.server_name and account.server_name.strip()) else "th"
     if region not in ("th", "us", "sg", "hk", "my"):
         region = "th"
-    
+
+    # Load cached access token
+    access_token = None
+    if creds.webull_access_token_encrypted:
+        try:
+            access_token = decrypt_password(creds.webull_access_token_encrypted)
+        except Exception:
+            pass
+
+    client = WebullRestClient(app_key, app_secret, region=region)
+    if access_token:
+        client.access_token = access_token
+
     try:
-        client = WebullRestClient(app_key, app_secret, region=region)
-        
-        # 1. Fetch Webull account ID
+        # 1. Try to fetch Webull account ID with current/cached token
         accounts_data = client.get_account_list()
+    except Exception as e:
+        # If current token is expired, invalid or not present, request a new token
+        try:
+            client.access_token = None
+            new_token = client.get_access_token()
+        except Exception as auth_err:
+            # Save the new pending token if it was generated
+            if client.access_token:
+                creds.webull_access_token_encrypted = encrypt_password(client.access_token)
+                db.commit()
+            raise HTTPException(status_code=400, detail=f"Webull Sync Error: {str(auth_err)}")
+
+        # Save the new successful token
+        creds.webull_access_token_encrypted = encrypt_password(client.access_token)
+        db.commit()
+        
+        try:
+            accounts_data = client.get_account_list()
+        except Exception as retry_err:
+            raise HTTPException(status_code=400, detail=f"Webull Sync Error: {str(retry_err)}")
+
+    try:
         if not accounts_data:
             raise Exception("No Webull accounts found under these credentials")
             
@@ -526,3 +558,4 @@ def sync_webull_account(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Webull Sync Error: {str(e)}")
+

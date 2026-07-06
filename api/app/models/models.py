@@ -78,7 +78,9 @@ class AccountCredentials(Base):
     publisher_token = Column(String, unique=True, index=True, nullable=False)  # Token used by MQL5 EA to authenticate
     webull_app_key_encrypted = Column(String, nullable=True)
     webull_app_secret_encrypted = Column(String, nullable=True)
+    webull_access_token_encrypted = Column(String, nullable=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 
     # Relationships
     account = relationship("TradingAccount", back_populates="credentials")

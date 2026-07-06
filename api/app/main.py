@@ -31,6 +31,11 @@ try:
             conn.execute(text("ALTER TABLE account_credentials ADD COLUMN webull_app_secret_encrypted VARCHAR(255) NULL"))
             conn.commit()
             print("Successfully added webull_app_secret_encrypted column")
+        if "webull_access_token_encrypted" not in columns:
+            conn.execute(text("ALTER TABLE account_credentials ADD COLUMN webull_access_token_encrypted TEXT NULL"))
+            conn.commit()
+            print("Successfully added webull_access_token_encrypted column")
+
 except Exception as e:
     print(f"Error applying dynamic schema migrations: {e}")
 
