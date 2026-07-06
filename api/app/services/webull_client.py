@@ -74,9 +74,16 @@ def build_signature_headers(
     if access_token:
         headers["x-access-token"] = access_token
 
-    # 1. Build lowercase canonical sign params
-    sign_params = {k.lower(): str(v) for k, v in headers.items()}
-    sign_params["host"] = host
+    # 1. Build lowercase canonical sign params (Excluding x-version and x-access-token)
+    sign_params = {
+        "x-app-key": app_key,
+        "x-timestamp": headers["x-timestamp"],
+        "x-signature-version": headers["x-signature-version"],
+        "x-signature-algorithm": headers["x-signature-algorithm"],
+        "x-signature-nonce": headers["x-signature-nonce"],
+        "host": host
+    }
+
 
     # 2. Add query parameters to sign_params
     for k, v in params.items():
@@ -144,6 +151,7 @@ class WebullRestClient:
             host=self.host,
             path=path,
             method="POST",
+            body_params={},
             app_key=self.app_key,
             app_secret=self.app_secret
         )
@@ -155,9 +163,12 @@ class WebullRestClient:
             raise Exception(f"Failed to generate Webull Access Token (HTTP {res.status_code}): {res.text}")
 
         data = res.json()
-        self.access_token = data.get("accessToken")
+        self.access_token = data.get("token") or data.get("accessToken")
         if not self.access_token:
-            raise Exception(f"Invalid Webull response: missing accessToken field: {data}")
+            raise Exception(f"Invalid Webull response: missing token/accessToken field: {data}")
+
+        if data.get("status") == "PENDING":
+            raise Exception("Webull Token Status is PENDING. Please open your Webull Mobile App, go to Menu -> Settings -> OpenAPI Access, and approve the connection first.")
 
         return self.access_token
 
@@ -171,6 +182,7 @@ class WebullRestClient:
             host=self.host,
             path=path,
             method="POST",
+            body_params={},
             app_key=self.app_key,
             app_secret=self.app_secret,
             access_token=token
