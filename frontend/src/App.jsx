@@ -470,19 +470,29 @@ function App() {
   const handleEditAccount = async (e) => {
     e.preventDefault();
     try {
+      const payload = {
+        account_name: editAccountName,
+        broker_name: editBrokerName,
+        server_name: editServerName,
+        leverage: parseInt(editLeverage) || 100,
+        connection_type: editConnectionType,
+        currency: editCurrency
+      };
+
+      const activeAcc = accounts.find(a => a.id.toString() === selectedAccountId);
+      if (activeAcc && activeAcc.account_type === 'stock' && editConnectionType === 'webull_api') {
+        if (editWebullAppKey) payload.webull_app_key = editWebullAppKey;
+        if (editWebullAppSecret) payload.webull_app_secret = editWebullAppSecret;
+      }
+
       const res = await fetch(`${API_BASE_URL}/v1/accounts/${selectedAccountId}`, {
         method: 'PATCH',
         headers: getHeaders(),
-        body: JSON.stringify({
-          account_name: editAccountName,
-          broker_name: editBrokerName,
-          server_name: editServerName,
-          leverage: parseInt(editLeverage),
-          connection_type: editConnectionType,
-          currency: editCurrency
-        })
+        body: JSON.stringify(payload)
       });
       if (res.ok) {
+        setEditWebullAppKey('');
+        setEditWebullAppSecret('');
         setShowEditAccountModal(false);
         await loadAccounts();
       }
@@ -3599,6 +3609,181 @@ function App() {
       );
     };
 
+    const renderEditAccountModal = () => {
+      if (!showEditAccountModal) return null;
+      const activeAcc = accounts.find(a => a.id.toString() === selectedAccountId);
+      if (!activeAcc) return null;
+      const isStock = activeAcc.account_type === 'stock';
+      const isCrypto = activeAcc.account_type === 'crypto';
+      const isWebull = isStock && activeAcc.connection_type === 'webull_api';
+
+      return (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '500px' }}>
+            <h3 style={{ fontSize: '1.3rem', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Edit size={20} style={{ color: 'var(--accent-secondary)' }} />
+              {isStock ? 'แก้ไขข้อมูลพอร์ตหุ้น' : isCrypto ? 'แก้ไขข้อมูลพอร์ตคริปโต' : 'แก้ไขข้อมูลพอร์ตเทรด MT5'}
+            </h3>
+            
+            <form onSubmit={handleEditAccount}>
+              <div className="form-group">
+                <label className="form-label">ชื่อเรียกบัญชี (Friendly Name)</label>
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  required 
+                  value={editAccountName} 
+                  onChange={(e) => setEditAccountName(e.target.value)} 
+                />
+              </div>
+
+              {!isWebull && (
+                <div className="form-group">
+                  <label className="form-label">{isCrypto ? 'ชื่อโบรคเกอร์ / กระเป๋า' : 'ชื่อโบรกเกอร์ (Broker Company)'}</label>
+                  <input 
+                    type="text" 
+                    className="form-input" 
+                    required 
+                    value={editBrokerName} 
+                    onChange={(e) => setEditBrokerName(e.target.value)} 
+                  />
+                </div>
+              )}
+
+              {/* Region selector for Webull */}
+              {isWebull ? (
+                <div className="form-group">
+                  <label className="form-label">ภูมิภาคบัญชี Webull (Account Region)</label>
+                  <select 
+                    className="form-input" 
+                    value={editServerName} 
+                    onChange={(e) => setEditServerName(e.target.value)}
+                  >
+                    <option value="th">🇹🇭 Webull Thailand (แนะนำ)</option>
+                    <option value="us">🇺🇸 Webull United States</option>
+                    <option value="sg">🇸🇬 Webull Singapore</option>
+                    <option value="hk">🇭🇰 Webull Hong Kong</option>
+                    <option value="my">🇲🇾 Webull Malaysia</option>
+                  </select>
+                </div>
+              ) : (
+                !isCrypto && (
+                  <div className="form-group">
+                    <label className="form-label">ชื่อเซิร์ฟเวอร์ (Server Name)</label>
+                    <input 
+                      type="text" 
+                      className="form-input" 
+                      required 
+                      value={editServerName} 
+                      onChange={(e) => setEditServerName(e.target.value)} 
+                    />
+                  </div>
+                )
+              )}
+
+              {isWebull && (
+                <>
+                  <div className="form-group">
+                    <label className="form-label">Webull App Key (ป้อนเพื่อแก้ไข)</label>
+                    <input 
+                      type="text" 
+                      className="form-input" 
+                      placeholder="หากไม่ต้องการเปลี่ยน ให้ปล่อยว่างไว้"
+                      value={editWebullAppKey} 
+                      onChange={(e) => setEditWebullAppKey(e.target.value)} 
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Webull App Secret (ป้อนเพื่อแก้ไข)</label>
+                    <input 
+                      type="password" 
+                      className="form-input" 
+                      placeholder="หากไม่ต้องการเปลี่ยน ให้ปล่อยว่างไว้"
+                      value={editWebullAppSecret} 
+                      onChange={(e) => setEditWebullAppSecret(e.target.value)} 
+                    />
+                  </div>
+                </>
+              )}
+
+              <div className="form-group">
+                <label className="form-label">สกุลเงินหลัก (Currency)</label>
+                {isStock ? (
+                  <select 
+                    className="form-input" 
+                    value={editCurrency} 
+                    onChange={(e) => setEditCurrency(e.target.value)}
+                  >
+                    <option value="USD">USD (ดอลลาร์สหรัฐ)</option>
+                    <option value="THB">THB (บาทไทย)</option>
+                  </select>
+                ) : (
+                  <select 
+                    className="form-input" 
+                    value={editCurrency} 
+                    onChange={(e) => setEditCurrency(e.target.value)}
+                  >
+                    <option value="USD">USD (ดอลลาร์สหรัฐ)</option>
+                    <option value="USC">USC (ดอลลาร์เซ็นต์ - Cent)</option>
+                    <option value="EUR">EUR (ยูโร)</option>
+                    <option value="EURC">EURC (ยูโรเซ็นต์ - Cent)</option>
+                    <option value="THB">THB (บาทไทย)</option>
+                  </select>
+                )}
+                {!isStock && !isCrypto && (
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
+                    * หากเป็นพอร์ตประเภท Cent แต่โบรกเกอร์รายงานเป็น USD ให้เปลี่ยนเป็น **USC** ระบบจะแปลงกำไรและขนาดพอร์ตกลับเป็นดอลลาร์จริงให้เองเมื่อนำไปคำนวณรวมกัน
+                  </span>
+                )}
+              </div>
+
+              {!isStock && !isCrypto && (
+                <div className="sections-grid" style={{ gap: '16px', marginBottom: 0 }}>
+                  <div className="form-group">
+                    <label className="form-label">Leverage</label>
+                    <input 
+                      type="number" 
+                      className="form-input" 
+                      required 
+                      value={editLeverage} 
+                      onChange={(e) => setEditLeverage(e.target.value)} 
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">รูปแบบการเชื่อมโยง (Sync Method)</label>
+                    <select 
+                      className="form-input" 
+                      value={editConnectionType} 
+                      onChange={(e) => setEditConnectionType(e.target.value)}
+                    >
+                      <option value="publisher_ea">Publisher EA (น้ำหนักเบา - แนะนำ)</option>
+                      <option value="account_sync">Account Sync (ใช้ Investor Password)</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '32px' }}>
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <button type="submit" className="btn-primary" style={{ width: 'auto', padding: '10px 24px' }}>บันทึกการแก้ไข</button>
+                  <button type="button" className="btn-secondary" onClick={() => setShowEditAccountModal(false)}>ยกเลิก</button>
+                </div>
+                
+                <button 
+                  type="button" 
+                  className="btn-logout" 
+                  style={{ border: '1px solid var(--error)', background: 'rgba(255, 75, 75, 0.1)', color: 'var(--error)', width: 'auto', padding: '10px 20px' }}
+                  onClick={handleDeleteAccount}
+                >
+                  ลบพอร์ตนี้ออกจากระบบ
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      );
+    };
+
     return (
       <div className="dashboard-layout">
         {page === 'public' ? (
@@ -3740,9 +3925,11 @@ function App() {
                     if (connType === 'webull_api') {
                       setNewAccCurrency('USD');
                       setNewAccBroker('Webull');
+                      setNewAccServer('th');
                     } else {
                       setNewAccCurrency('THB');
                       setNewAccBroker('SET');
+                      setNewAccServer('');
                     }
                   }}>
                     <option value="manual">Manual (กรอกข้อมูลเอง)</option>
@@ -3771,12 +3958,23 @@ function App() {
                       <input type="text" className="form-input" placeholder="ป้อนเลขบัญชี หรือปล่อยว่างให้ระบบอิงบัญชีหลักอัตโนมัติ" value={newAccNumber} onChange={(e) => setNewAccNumber(e.target.value)} />
                     </div>
                     <div className="form-group">
-                      <label className="form-label">สกุลเงินหลัก (Currency)</label>
-                      <select className="form-input" value={newAccCurrency} onChange={(e) => setNewAccCurrency(e.target.value)}>
-                        <option value="USD">USD (หุ้นต่างประเทศ)</option>
-                        <option value="THB">THB (หุ้นไทย)</option>
+                      <label className="form-label">ภูมิภาคบัญชี Webull (Account Region)</label>
+                      <select className="form-input" value={newAccServer} onChange={(e) => setNewAccServer(e.target.value)}>
+                        <option value="th">🇹🇭 Webull Thailand (แนะนำ)</option>
+                        <option value="us">🇺🇸 Webull United States</option>
+                        <option value="sg">🇸🇬 Webull Singapore</option>
+                        <option value="hk">🇭🇰 Webull Hong Kong</option>
+                        <option value="my">🇲🇾 Webull Malaysia</option>
                       </select>
                     </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">สกุลเงินหลัก (Currency)</label>
+                    <select className="form-input" value={newAccCurrency} onChange={(e) => setNewAccCurrency(e.target.value)}>
+                      <option value="USD">USD (หุ้นต่างประเทศ)</option>
+                      <option value="THB">THB (หุ้นไทย)</option>
+                    </select>
                   </div>
                 </>
               ) : (
@@ -4061,110 +4259,8 @@ function App() {
         </div>
       )}
 
-      {/* Modal 5: Edit Trading Account */}
-      {showEditAccountModal && (
-        <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '500px' }}>
-            <h3 style={{ fontSize: '1.3rem', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Edit size={20} style={{ color: 'var(--accent-secondary)' }} />
-              แก้ไขข้อมูลพอร์ตเทรด MT5
-            </h3>
-            
-            <form onSubmit={handleEditAccount}>
-              <div className="form-group">
-                <label className="form-label">ชื่อเรียกบัญชี (Account Friendly Name)</label>
-                <input 
-                  type="text" 
-                  className="form-input" 
-                  required 
-                  value={editAccountName} 
-                  onChange={(e) => setEditAccountName(e.target.value)} 
-                />
-              </div>
+      {renderEditAccountModal()}
 
-              <div className="form-group">
-                <label className="form-label">ชื่อโบรกเกอร์ (Broker Company)</label>
-                <input 
-                  type="text" 
-                  className="form-input" 
-                  required 
-                  value={editBrokerName} 
-                  onChange={(e) => setEditBrokerName(e.target.value)} 
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">ชื่อเซิร์ฟเวอร์ (Server Name)</label>
-                <input 
-                  type="text" 
-                  className="form-input" 
-                  required 
-                  value={editServerName} 
-                  onChange={(e) => setEditServerName(e.target.value)} 
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">สกุลเงินหลัก (Currency)</label>
-                <select 
-                  className="form-input" 
-                  value={editCurrency} 
-                  onChange={(e) => setEditCurrency(e.target.value)}
-                >
-                  <option value="USD">USD (ดอลลาร์สหรัฐ)</option>
-                  <option value="USC">USC (ดอลลาร์เซ็นต์ - Cent)</option>
-                  <option value="EUR">EUR (ยูโร)</option>
-                  <option value="EURC">EURC (ยูโรเซ็นต์ - Cent)</option>
-                  <option value="THB">THB (บาทไทย)</option>
-                </select>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
-                  * หากเป็นพอร์ตประเภท Cent แต่โบรกเกอร์รายงานเป็น USD ให้เปลี่ยนเป็น **USC** ระบบจะแปลงกำไรและขนาดพอร์ตกลับเป็นดอลลาร์จริงให้เองเมื่อนำไปคำนวณรวมกัน
-                </span>
-              </div>
-
-              <div className="sections-grid" style={{ gap: '16px', marginBottom: 0 }}>
-                <div className="form-group">
-                  <label className="form-label">Leverage</label>
-                  <input 
-                    type="number" 
-                    className="form-input" 
-                    required 
-                    value={editLeverage} 
-                    onChange={(e) => setEditLeverage(e.target.value)} 
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">รูปแบบการเชื่อมโยง (Sync Method)</label>
-                  <select 
-                    className="form-input" 
-                    value={editConnectionType} 
-                    onChange={(e) => setEditConnectionType(e.target.value)}
-                  >
-                    <option value="publisher_ea">Publisher EA (น้ำหนักเบา - แนะนำ)</option>
-                    <option value="account_sync">Account Sync (ใช้ Investor Password)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '32px' }}>
-                <div style={{ display: 'flex', gap: '12px' }}>
-                  <button type="submit" className="btn-primary" style={{ width: 'auto', padding: '10px 24px' }}>บันทึกการแก้ไข</button>
-                  <button type="button" className="btn-secondary" onClick={() => setShowEditAccountModal(false)}>ยกเลิก</button>
-                </div>
-                
-                <button 
-                  type="button" 
-                  className="btn-logout" 
-                  style={{ border: '1px solid var(--error)', background: 'rgba(255, 75, 75, 0.1)', color: 'var(--error)', width: 'auto', padding: '10px 20px' }}
-                  onClick={handleDeleteAccount}
-                >
-                  ลบพอร์ตนี้ออกจากระบบ
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

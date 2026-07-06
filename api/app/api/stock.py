@@ -441,7 +441,9 @@ def sync_webull_account(
     except Exception as e:
         raise HTTPException(status_code=500, detail="Failed to decrypt Webull credentials")
 
-    region = "us" if account.currency == "USD" else "th"
+    region = account.server_name.strip().lower() if (account.server_name and account.server_name.strip()) else "th"
+    if region not in ("th", "us", "sg", "hk", "my"):
+        region = "th"
     
     try:
         client = WebullRestClient(app_key, app_secret, region=region)
