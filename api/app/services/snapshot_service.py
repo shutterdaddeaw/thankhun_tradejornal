@@ -14,7 +14,7 @@ from sqlalchemy import insert, select, and_
 from app.core.database import SessionLocal
 from app.models.models import (
     User, TradingAccount, StockCashBalance, StockHolding,
-    CryptoHolding, NetWorthSnapshot
+    CryptoHolding, NetWorthSnapshot, DailyEquitySnapshot
 )
 from app.api.utils import get_usd_thb_rate
 
@@ -31,7 +31,8 @@ def _is_cent(currency: str) -> bool:
 
 def take_snapshot_for_user(db: Session, user_id: int, snap_date: date = None) -> dict:
     """
-    Calculate and upsert a net worth snapshot for one user.
+    Calculate and upsert a net worth snapshot for one user,
+    including individual account-level DailyEquitySnapshots.
     snap_date defaults to today (Bangkok timezone).
     Returns the snapshot dict.
     """
@@ -77,7 +78,44 @@ def take_snapshot_for_user(db: Session, user_id: int, snap_date: date = None) ->
             ).all()
             crypto_usd += sum(h.value_usd for h in holdings)
 
-    # ── Upsert ─────────────────────────────────────────────────────────────
+    # ── Individual Account Snapshots ──
+    for acc in accounts:
+        if not acc.account_type or acc.account_type == "forex":
+            acc_eq = acc.equity / 100 if _is_cent(acc.currency) else acc.equity
+            acc_bal = acc.balance / 100 if _is_cent(acc.currency) else acc.balance
+        elif acc.account_type == "stock":
+            cash_row = db.query(StockCashBalance).filter(StockCashBalance.account_id == acc.id).first()
+            cash = cash_row.cash_balance if cash_row else 0.0
+            holdings = db.query(StockHolding).filter(StockHolding.account_id == acc.id).all()
+            market_value = sum(h.volume * h.current_price for h in holdings)
+            acc_eq = (cash + market_value) / rate
+            acc_bal = acc_eq
+        elif acc.account_type == "crypto":
+            holdings = db.query(CryptoHolding).filter(CryptoHolding.account_id == acc.id).all()
+            acc_eq = sum(h.value_usd for h in holdings)
+            acc_bal = acc_eq
+        else:
+            continue
+
+        existing_eq = db.query(DailyEquitySnapshot).filter(
+            and_(
+                DailyEquitySnapshot.account_id == acc.id,
+                DailyEquitySnapshot.date == snap_date
+            )
+        ).first()
+        if existing_eq:
+            existing_eq.equity = acc_eq
+            existing_eq.balance = acc_bal
+        else:
+            new_eq = DailyEquitySnapshot(
+                account_id=acc.id,
+                date=snap_date,
+                balance=acc_bal,
+                equity=acc_eq
+            )
+            db.add(new_eq)
+
+    # ── Upsert NetWorthSnapshot ─────────────────────────────────────────────
     # Use merge pattern (works for both SQLite and PostgreSQL)
     existing = db.query(NetWorthSnapshot).filter(
         and_(

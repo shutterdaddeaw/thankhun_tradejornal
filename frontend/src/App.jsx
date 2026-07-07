@@ -850,9 +850,18 @@ function App() {
     }
   };
 
-  const renderAssetDailyChart = (assetKey, assetLabel, color) => {
-    const hasData = nwSnapshots.filter(d => d[assetKey] !== null).length > 0;
+  const renderAssetDailyChart = (assetType, assetLabel) => {
+    // Filter account metadata matching this assetType
+    const matchingAccounts = dailyPortfoliosAccounts.filter(acc => acc.account_type === assetType);
     
+    // Check if there is any data in dailyPortfolios
+    const hasData = dailyPortfolios.length > 0 && matchingAccounts.some(acc => 
+      dailyPortfolios.some(day => day[acc.key] !== null)
+    );
+
+    // Color list for distinct lines
+    const lineColors = ['#818cf8', '#f59e0b', '#10b981', '#f43f5e', '#a855f7', '#06b6d4', '#eab308', '#3b82f6'];
+
     return (
       <div className="section-box" style={{ marginTop: '24px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
@@ -910,7 +919,7 @@ function App() {
         ) : (
           <div style={{ width: '100%', height: 260 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={nwSnapshots} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <LineChart data={dailyPortfolios} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
                 <XAxis
                   dataKey="day"
@@ -927,10 +936,26 @@ function App() {
                 />
                 <Tooltip
                   contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '10px', fontSize: '0.83rem' }}
-                  formatter={(value) => value != null ? [`$${Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 })}`, assetLabel] : ['-', assetLabel]}
+                  formatter={(value, name) => value != null ? [`$${Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 })}`, name] : ['-', name]}
                   labelFormatter={label => `Day ${label}`}
                 />
-                <Line type="monotone" dataKey={assetKey} name={assetLabel} stroke={color} strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} connectNulls />
+                <Legend
+                  wrapperStyle={{ fontSize: '0.82rem', paddingTop: '12px' }}
+                  formatter={v => <span style={{ color: 'var(--text-secondary)' }}>{v}</span>}
+                />
+                {matchingAccounts.map((acc, index) => (
+                  <Line
+                    key={acc.key}
+                    type="monotone"
+                    dataKey={acc.key}
+                    name={acc.account_name}
+                    stroke={lineColors[index % lineColors.length]}
+                    strokeWidth={2}
+                    dot={{ r: 3 }}
+                    activeDot={{ r: 5 }}
+                    connectNulls
+                  />
+                ))}
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -2337,7 +2362,7 @@ function App() {
             </div>
           </div>
           {/* Daily Stock Net Worth Line Chart */}
-          {renderAssetDailyChart('stock_usd', 'Stocks', '#f59e0b')}
+          {renderAssetDailyChart('stock', 'Stocks')}
         </div>
       );
     }
@@ -2704,7 +2729,7 @@ function App() {
             </div>
           </div>
           {/* Daily Crypto Net Worth Line Chart */}
-          {renderAssetDailyChart('crypto_usd', 'Crypto', '#10b981')}
+          {renderAssetDailyChart('crypto', 'Crypto')}
         </div>
       );
     }
@@ -3695,7 +3720,7 @@ function App() {
               </div>
             </div>
             {/* Daily Forex Net Worth Line Chart */}
-            {selectedAccountId === 'all' && renderAssetDailyChart('forex_usd', 'Forex', '#818cf8')}
+            {selectedAccountId === 'all' && renderAssetDailyChart('forex', 'Forex')}
           </>
         ) : (
           <div className="section-box" style={{ textAlign: 'center', padding: '60px 20px' }}>
