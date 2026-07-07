@@ -500,13 +500,27 @@ def sync_webull_account(
 
         # 2. Get Balance (to get cash balance and total equity)
         balance_data = client.get_account_balance(webull_acc_id)
-        cash_val = balance_data.get("cash_balance")
+        
+        cash_val = None
+        # Robust multi-currency cash balance selector matching account.currency
+        assets_list = balance_data.get("account_currency_assets", [])
+        target_curr = (account.currency or "USD").upper()
+        for asset in assets_list:
+            if asset.get("currency") == target_curr:
+                cash_val = asset.get("cash_balance")
+                break
+                
+        if cash_val is None:
+            cash_val = balance_data.get("total_cash_balance")
+        if cash_val is None:
+            cash_val = balance_data.get("cash_balance")
         if cash_val is None:
             cash_val = balance_data.get("cash")
         if cash_val is None:
             cash_val = balance_data.get("buying_power", 0.0)
             
         cash_val = float(cash_val)
+
 
         # 3. Get Positions (holdings)
         positions_data = client.get_account_positions(webull_acc_id)

@@ -175,21 +175,20 @@ class WebullRestClient:
     def get_account_list(self) -> list:
         """Retrieve list of accounts."""
         token = self.get_access_token()
-        path = "/api/v2/account/get_account_list"
+        path = "/openapi/account/list"
         url = f"{self.base_url}{path}"
 
         headers = build_signature_headers(
             host=self.host,
             path=path,
-            method="POST",
-            body_params={},
+            method="GET",
             app_key=self.app_key,
             app_secret=self.app_secret,
             access_token=token
         )
         headers["Content-Type"] = "application/json"
 
-        res = requests.post(url, headers=headers, json={}, timeout=5)
+        res = requests.get(url, headers=headers, timeout=5)
         if res.status_code != 200:
             raise Exception(f"Failed to get Webull account list (HTTP {res.status_code}): {res.text}")
 
@@ -198,22 +197,22 @@ class WebullRestClient:
     def get_account_balance(self, account_id: str) -> dict:
         """Retrieve balance for specific account."""
         token = self.get_access_token()
-        path = "/api/v2/account/get_account_balance"
+        path = "/openapi/assets/balance"
         url = f"{self.base_url}{path}"
 
-        body = {"account_id": account_id}
+        params = {"account_id": account_id}
         headers = build_signature_headers(
             host=self.host,
             path=path,
-            method="POST",
-            body_params=body,
+            method="GET",
+            params=params,
             app_key=self.app_key,
             app_secret=self.app_secret,
             access_token=token
         )
         headers["Content-Type"] = "application/json"
 
-        res = requests.post(url, headers=headers, json=body, timeout=5)
+        res = requests.get(url, headers=headers, params=params, timeout=5)
         if res.status_code != 200:
             raise Exception(f"Failed to get Webull balance (HTTP {res.status_code}): {res.text}")
 
@@ -222,27 +221,27 @@ class WebullRestClient:
     def get_account_positions(self, account_id: str) -> list:
         """Retrieve positions (holdings) for specific account."""
         token = self.get_access_token()
-        path = "/api/v2/account/get_account_positions"
+        path = "/openapi/assets/positions"
         url = f"{self.base_url}{path}"
 
-        body = {"account_id": account_id}
+        params = {"account_id": account_id}
         headers = build_signature_headers(
             host=self.host,
             path=path,
-            method="POST",
-            body_params=body,
+            method="GET",
+            params=params,
             app_key=self.app_key,
             app_secret=self.app_secret,
             access_token=token
         )
         headers["Content-Type"] = "application/json"
 
-        res = requests.post(url, headers=headers, json=body, timeout=5)
+        res = requests.get(url, headers=headers, params=params, timeout=5)
         if res.status_code != 200:
             raise Exception(f"Failed to get Webull positions (HTTP {res.status_code}): {res.text}")
 
-        # Returns position list or wrapper dict depending on API model
         data = res.json()
         if isinstance(data, dict) and "positions" in data:
             return data["positions"]
         return data
+
