@@ -2289,6 +2289,7 @@ function App() {
                 <tbody>
                   {sortedAccounts.map(acc => {
                     const { usd, thb } = getAccountBalances(acc);
+                    const isUSDNative = acc.currency === 'USD' || acc.currency === 'USC' || acc.currency === 'USCENT';
                     return (
                       <tr key={acc.id}>
                         <td>
