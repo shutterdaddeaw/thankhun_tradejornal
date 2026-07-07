@@ -31,6 +31,20 @@ def get_crypto_prices(symbols: List[str]) -> dict:
         except Exception:
             pass
             
+        # Try DexScreener Search (Highly reliable geoblock fallback)
+        try:
+            res = requests.get(f"https://api.dexscreener.com/latest/dex/search?q={sym}", timeout=3)
+            if res.status_code == 200:
+                pairs = res.json().get("pairs") or []
+                matching_pairs = [p for p in pairs if p.get("quoteToken", {}).get("symbol", "").upper() in ("USDT", "USDC", "USD")]
+                if not matching_pairs:
+                    matching_pairs = pairs
+                if matching_pairs:
+                    prices[symbol] = float(matching_pairs[0].get("priceUsd", 0.0))
+                    continue
+        except Exception:
+            pass
+            
         # Try Jupiter Price API (for Solana ecosystem tokens)
         try:
             res = requests.get(f"https://api.jup.ag/price/v2?ids={sym}", timeout=3)

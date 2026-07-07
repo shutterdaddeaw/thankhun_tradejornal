@@ -597,10 +597,14 @@ function App() {
           ]).then(([holdings, cash]) => ({ acc, holdings, cash: cash.cash_balance || 0 }))
         )
       );
+      const rate = usdThbRate || 33.0;
       const merged = results.flatMap(({ acc, holdings }) =>
-        holdings.map(h => ({ ...h, account_name: acc.account_name }))
+        holdings.map(h => ({ ...h, account_name: acc.account_name, currency: acc.currency }))
       );
-      const totalCash = results.reduce((s, { cash }) => s + cash, 0);
+      const totalCash = results.reduce((s, { acc, cash }) => {
+        const isUSD = acc.currency === 'USD';
+        return s + (isUSD ? cash * rate : cash);
+      }, 0);
       setAllStockHoldings(merged);
       setAllStockCashTotal(totalCash);
       setStockTrades([]);
@@ -1957,10 +1961,13 @@ function App() {
     const cryptoAccs = accounts.filter(a => a.account_type === 'crypto');
 
     const forexTotal = forexAccs.reduce((sum, a) => sum + (isCentCurrency(a.currency) ? a.equity / 100 : a.equity), 0);
-    const stockTotal = stockAccs.reduce((sum, a) => sum + a.equity, 0);
+    const rate = usdThbRate || 33.0;
+    const stockTotal = stockAccs.reduce((sum, a) => {
+      const isUSD = a.currency === 'USD';
+      return sum + (isUSD ? a.equity * rate : a.equity);
+    }, 0);
     const cryptoTotal = cryptoAccs.reduce((sum, a) => sum + a.equity, 0);
 
-    const rate = usdThbRate || 33.0;
     const forexUSD = forexTotal;
     const stockUSD = stockTotal / rate;
     const cryptoUSD = cryptoTotal;
@@ -2281,9 +2288,19 @@ function App() {
     // Combined view for all stock portfolios
     if (selectedAccountId === 'all-stock') {
       const stockAccs = accounts.filter(a => a.account_type === 'stock');
-      const allMarketValue = allStockHoldings.reduce((s, h) => s + (h.volume * h.current_price), 0);
+      const rate = usdThbRate || 33.0;
+      const allMarketValue = allStockHoldings.reduce((s, h) => {
+        const val = h.volume * h.current_price;
+        const isUSD = h.currency === 'USD';
+        return s + (isUSD ? val * rate : val);
+      }, 0);
       const allTotalValue = allMarketValue + allStockCashTotal;
-      const allUnrealizedPnL = allStockHoldings.reduce((s, h) => s + h.pnl, 0);
+      const allUnrealizedPnL = allStockHoldings.reduce((s, h) => {
+        const val = h.pnl;
+        const isUSD = h.currency === 'USD';
+        return s + (isUSD ? val * rate : val);
+      }, 0);
+
       return (
         <div className="stock-dashboard">
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', marginBottom: '24px' }}>
@@ -2295,33 +2312,42 @@ function App() {
             }}>
               <div className="stat-label" style={{ color: 'var(--accent-secondary)', fontWeight: '700', fontSize: '1rem' }}>💼 มูลค่าพอร์ตหุ้นรวมทั้งหมด</div>
               <div className="stat-value" style={{ fontSize: '2.4rem', fontWeight: '800', color: '#fff', margin: '8px 0 4px 0' }}>
-                {hideBalances ? '••••' : `${allTotalValue.toLocaleString(undefined, { minimumFractionDigits: 2 })} THB`}
+                {hideBalances ? '••••' : `฿${allTotalValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
               </div>
-              <div className="stat-desc" style={{ fontSize: '0.85rem' }}>{stockAccs.length} พอร์ตหุ้น · เงินสด + มูลค่าหุ้น</div>
+              <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                {hideBalances ? '••••' : `≈ $${(allTotalValue / rate).toLocaleString(undefined, { minimumFractionDigits: 2 })} USD`}
+              </div>
+              <div className="stat-desc" style={{ marginTop: '4px' }}>{stockAccs.length} พอร์ตหุ้น · เงินสด + มูลค่าหุ้น</div>
             </div>
             
             <div className="stat-card" style={{ flex: '1 1 200px' }}>
               <div className="stat-label">💵 เงินสดรวม</div>
               <div className="stat-value" style={{ fontSize: '1.6rem', fontWeight: '700' }}>
-                {hideBalances ? '••••' : `${allStockCashTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })} THB`}
+                {hideBalances ? '••••' : `฿${allStockCashTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
               </div>
-              <div className="stat-desc">Cash across all portfolios</div>
+              <div className="stat-desc">
+                {hideBalances ? '••••' : `≈ $${(allStockCashTotal / rate).toLocaleString(undefined, { minimumFractionDigits: 2 })} USD`}
+              </div>
             </div>
             
             <div className="stat-card" style={{ flex: '1 1 200px' }}>
               <div className="stat-label">📈 มูลค่าหุ้นรวม (Market Value)</div>
               <div className="stat-value" style={{ fontSize: '1.6rem', fontWeight: '700' }}>
-                {hideBalances ? '••••' : `${allMarketValue.toLocaleString(undefined, { minimumFractionDigits: 2 })} THB`}
+                {hideBalances ? '••••' : `฿${allMarketValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
               </div>
-              <div className="stat-desc">{allStockHoldings.length} รายการถือครอง</div>
+              <div className="stat-desc">
+                {hideBalances ? '••••' : `≈ $${(allMarketValue / rate).toLocaleString(undefined, { minimumFractionDigits: 2 })} USD`}
+              </div>
             </div>
             
             <div className="stat-card" style={{ flex: '1 1 200px' }}>
               <div className="stat-label">📊 กำไร/ขาดทุนสะสม (Unrealized)</div>
               <div className="stat-value" style={{ fontSize: '1.6rem', fontWeight: '700', color: allUnrealizedPnL >= 0 ? 'var(--success)' : 'var(--error)' }}>
-                {hideBalances ? '••••' : `${allUnrealizedPnL >= 0 ? '+' : ''}${allUnrealizedPnL.toLocaleString(undefined, { minimumFractionDigits: 2 })} THB`}
+                {hideBalances ? '••••' : `${allUnrealizedPnL >= 0 ? '+' : ''}฿${allUnrealizedPnL.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
               </div>
-              <div className="stat-desc">Unrealized PnL รวม</div>
+              <div className="stat-desc">
+                {hideBalances ? '••••' : `≈ $${(allUnrealizedPnL / rate).toLocaleString(undefined, { minimumFractionDigits: 2 })} USD`}
+              </div>
             </div>
           </div>
 
@@ -2374,22 +2400,46 @@ function App() {
                 <thead><tr>
                   <th>พอร์ต</th><th>หุ้น (Symbol)</th><th style={{ textAlign: 'right' }}>จำนวนหุ้น</th>
                   <th style={{ textAlign: 'right' }}>ราคาทุน</th><th style={{ textAlign: 'right' }}>ราคาล่าสุด</th>
-                  <th style={{ textAlign: 'right' }}>มูลค่า (THB)</th><th style={{ textAlign: 'right' }}>กำไร/ขาดทุน</th>
+                  <th style={{ textAlign: 'right' }}>มูลค่า</th><th style={{ textAlign: 'right' }}>กำไร/ขาดทุน</th>
                 </tr></thead>
                 <tbody>
-                  {allStockHoldings.map((h, i) => (
-                    <tr key={i}>
-                      <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{h.account_name}</td>
-                      <td style={{ fontWeight: '700', color: 'var(--accent-secondary)' }}>{h.symbol}</td>
-                      <td style={{ textAlign: 'right' }}>{h.volume.toLocaleString()}</td>
-                      <td style={{ textAlign: 'right' }}>{h.avg_cost ? h.avg_cost.toFixed(2) : '-'}</td>
-                      <td style={{ textAlign: 'right' }}>{h.current_price ? h.current_price.toFixed(2) : '-'}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{hideBalances ? '••••' : (h.volume * h.current_price).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 'bold', color: h.pnl >= 0 ? 'var(--success)' : 'var(--error)' }}>
-                        {hideBalances ? '••••' : `${h.pnl >= 0 ? '+' : ''}${h.pnl.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-                      </td>
-                    </tr>
-                  ))}
+                  {allStockHoldings.map((h, i) => {
+                    const isUSD = h.currency === 'USD';
+                    const value = h.volume * h.current_price;
+                    return (
+                      <tr key={i}>
+                        <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{h.account_name}</td>
+                        <td style={{ fontWeight: '700', color: 'var(--accent-secondary)' }}>{h.symbol}</td>
+                        <td style={{ textAlign: 'right' }}>{h.volume.toLocaleString()}</td>
+                        <td style={{ textAlign: 'right' }}>
+                          {isUSD 
+                            ? `$${h.avg_cost ? h.avg_cost.toFixed(2) : '0.00'} USD` 
+                            : `฿${h.avg_cost ? h.avg_cost.toFixed(2) : '0.00'} THB`
+                          }
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          {isUSD 
+                            ? `$${h.current_price ? h.current_price.toFixed(2) : '0.00'} USD` 
+                            : `฿${h.current_price ? h.current_price.toFixed(2) : '0.00'} THB`
+                          }
+                        </td>
+                        <td style={{ textAlign: 'right', fontWeight: 'bold' }}>
+                          {hideBalances ? '••••' : (
+                            isUSD 
+                              ? `$${value.toLocaleString(undefined, { minimumFractionDigits: 2 })} USD` 
+                              : `฿${value.toLocaleString(undefined, { minimumFractionDigits: 2 })} THB`
+                          )}
+                        </td>
+                        <td style={{ textAlign: 'right', fontWeight: 'bold', color: h.pnl >= 0 ? 'var(--success)' : 'var(--error)' }}>
+                          {hideBalances ? '••••' : (
+                            isUSD 
+                              ? `${h.pnl >= 0 ? '+' : ''}$${h.pnl.toLocaleString(undefined, { minimumFractionDigits: 2 })} USD` 
+                              : `${h.pnl >= 0 ? '+' : ''}฿${h.pnl.toLocaleString(undefined, { minimumFractionDigits: 2 })} THB`
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                   {allStockHoldings.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>ไม่มีหุ้นในพอร์ต</td></tr>}
                 </tbody>
               </table>
