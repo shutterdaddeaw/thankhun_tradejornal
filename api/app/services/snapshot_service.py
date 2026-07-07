@@ -49,8 +49,8 @@ def take_snapshot_for_user(db: Session, user_id: int, snap_date: date = None) ->
     forex_usd = 0.0
     for acc in accounts:
         if not acc.account_type or acc.account_type == "forex":
-            eq = acc.equity / 100 if _is_cent(acc.currency) else acc.equity
-            forex_usd += eq
+            bal = acc.balance / 100 if _is_cent(acc.currency) else acc.balance
+            forex_usd += bal
 
     # ── Stock USD (THB → USD) ───────────────────────────────────────────────
     stock_usd = 0.0

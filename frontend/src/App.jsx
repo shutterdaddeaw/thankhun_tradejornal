@@ -1960,13 +1960,13 @@ function App() {
     const stockAccs = accounts.filter(a => a.account_type === 'stock');
     const cryptoAccs = accounts.filter(a => a.account_type === 'crypto');
 
-    const forexTotal = forexAccs.reduce((sum, a) => sum + (isCentCurrency(a.currency) ? a.equity / 100 : a.equity), 0);
+    const forexTotal = forexAccs.reduce((sum, a) => sum + (isCentCurrency(a.currency) ? a.balance / 100 : a.balance), 0);
     const rate = usdThbRate || 33.0;
     const stockTotal = stockAccs.reduce((sum, a) => {
       const isUSD = a.currency === 'USD';
-      return sum + (isUSD ? a.equity * rate : a.equity);
+      return sum + (isUSD ? a.balance * rate : a.balance);
     }, 0);
-    const cryptoTotal = cryptoAccs.reduce((sum, a) => sum + a.equity, 0);
+    const cryptoTotal = cryptoAccs.reduce((sum, a) => sum + a.balance, 0);
 
     const forexUSD = forexTotal;
     const stockUSD = stockTotal / rate;
@@ -1995,8 +1995,8 @@ function App() {
       else if (nwSortKey === 'account_type') { va = (a.account_type || 'forex'); vb = (b.account_type || 'forex'); }
       else if (nwSortKey === 'broker_name') { va = a.broker_name?.toLowerCase(); vb = b.broker_name?.toLowerCase(); }
       else if (nwSortKey === 'equity') {
-        va = isCentCurrency(a.currency) ? a.equity / 100 : a.equity;
-        vb = isCentCurrency(b.currency) ? b.equity / 100 : b.equity;
+        va = isCentCurrency(a.currency) ? a.balance / 100 : a.balance;
+        vb = isCentCurrency(b.currency) ? b.balance / 100 : b.balance;
       }
       if (va < vb) return nwSortDir === 'asc' ? -1 : 1;
       if (va > vb) return nwSortDir === 'asc' ? 1 : -1;
@@ -2268,7 +2268,7 @@ function App() {
                       </td>
                       <td>{acc.broker_name}</td>
                       <td style={{ textAlign: 'right', fontWeight: 'bold', color: acc.account_type === 'stock' ? '#f59e0b' : acc.account_type === 'crypto' ? '#10b981' : '#818cf8' }}>
-                        {hideBalances ? '••••' : `${(isCentCurrency(acc.currency) ? acc.equity / 100 : acc.equity).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${acc.currency}`}
+                        {hideBalances ? '••••' : `${(isCentCurrency(acc.currency) ? acc.balance / 100 : acc.balance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${acc.currency}`}
                       </td>
                     </tr>
                   ))}
