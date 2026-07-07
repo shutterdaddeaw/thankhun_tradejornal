@@ -120,6 +120,8 @@ function App() {
   const [nwSortDir, setNwSortDir] = useState('asc');
   // Net Worth chart state
   const [nwSnapshots, setNwSnapshots] = useState([]);
+  const [dailyPortfolios, setDailyPortfolios] = useState([]);
+  const [dailyPortfoliosAccounts, setDailyPortfoliosAccounts] = useState([]);
   const [nwChartYear, setNwChartYear] = useState(new Date().getFullYear());
   const [nwChartMonth, setNwChartMonth] = useState(new Date().getMonth() + 1);
   const [nwChartLoading, setNwChartLoading] = useState(false);
@@ -835,13 +837,20 @@ function App() {
   const loadNwSnapshots = async (year = nwChartYear, month = nwChartMonth) => {
     setNwChartLoading(true);
     try {
-      const res = await fetch(
-        `${API_BASE_URL}/v1/networth/snapshots?year=${year}&month=${month}`,
-        { headers: getHeaders() }
-      );
+      const [res, portRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/v1/networth/snapshots?year=${year}&month=${month}`, { headers: getHeaders() }),
+        fetch(`${API_BASE_URL}/v1/networth/daily-portfolios?year=${year}&month=${month}`, { headers: getHeaders() })
+      ]);
+      
       if (res.ok) {
         const data = await res.json();
         setNwSnapshots(data.days || []);
+      }
+      
+      if (portRes.ok) {
+        const portData = await portRes.json();
+        setDailyPortfolios(portData.days || []);
+        setDailyPortfoliosAccounts(portData.accounts || []);
       }
     } catch (e) {
       console.warn('Could not load net worth snapshots');
