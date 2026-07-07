@@ -2214,7 +2214,7 @@ function App() {
         </div>
 
         {/* ── Donut Chart + Sortable Table ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '20px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '340px 1fr', gap: '20px' }}>
           {/* Donut Chart */}
           <div className="section-box" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <div className="section-title" style={{ width: '100%' }}>📊 สัดส่วนพอร์ตการลงทุน (Asset Allocation)</div>
@@ -2301,11 +2301,21 @@ function App() {
                         </td>
                         <td>{acc.broker_name}</td>
                         <td style={{ fontWeight: '600' }}>{acc.account_name}</td>
-                        <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{acc.account_number || '-'}</td>
-                        <td style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--success)' }}>
+                        <td style={{ fontFamily: 'monospace', fontSize: '0.8rem', maxWidth: '140px', wordBreak: 'break-all', whiteSpace: 'normal', lineHeight: '1.2' }}>
+                          {acc.account_number || '-'}
+                        </td>
+                        <td style={{ 
+                          textAlign: 'right', 
+                          fontWeight: isUSDNative ? 'normal' : 'bold', 
+                          color: isUSDNative ? 'var(--text-secondary)' : 'var(--success)' 
+                        }}>
                           {hideBalances ? '••••' : `฿${thb.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                         </td>
-                        <td style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--accent-secondary)' }}>
+                        <td style={{ 
+                          textAlign: 'right', 
+                          fontWeight: isUSDNative ? 'bold' : 'normal', 
+                          color: isUSDNative ? 'var(--accent-secondary)' : 'var(--text-secondary)' 
+                        }}>
                           {hideBalances ? '••••' : `$${usd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                         </td>
                       </tr>
