@@ -67,7 +67,10 @@ def take_snapshot_for_user(db: Session, user_id: int, snap_date: date = None) ->
                 StockHolding.account_id == acc.id
             ).all()
             market_value = sum(h.volume * h.current_price for h in holdings)
-            stock_usd += (cash + market_value) / rate
+            val = cash + market_value
+            if acc.currency != "USD":
+                val = val / rate
+            stock_usd += val
 
     # ── Crypto USD ─────────────────────────────────────────────────────────
     crypto_usd = 0.0
@@ -88,7 +91,9 @@ def take_snapshot_for_user(db: Session, user_id: int, snap_date: date = None) ->
             cash = cash_row.cash_balance if cash_row else 0.0
             holdings = db.query(StockHolding).filter(StockHolding.account_id == acc.id).all()
             market_value = sum(h.volume * h.current_price for h in holdings)
-            acc_eq = (cash + market_value) / rate
+            acc_eq = cash + market_value
+            if acc.currency != "USD":
+                acc_eq = acc_eq / rate
             acc_bal = acc_eq
         elif acc.account_type == "crypto":
             holdings = db.query(CryptoHolding).filter(CryptoHolding.account_id == acc.id).all()

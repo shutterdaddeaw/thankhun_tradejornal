@@ -119,10 +119,15 @@ def get_daily_portfolios(
         )
     ).order_by(DailyEquitySnapshot.date).all()
 
-    # Build map of (date, account_id) -> equity
+    # Build map of (date, account_id) -> equity (converting cent accounts to USD)
     snap_map = {}
+    account_dict = {a.id: a for a in accounts}
     for s in snapshots:
-        snap_map[(s.date, s.account_id)] = s.equity
+        acc = account_dict.get(s.account_id)
+        val = s.equity
+        if acc and _is_cent(acc.currency or ""):
+            val = val / 100.0
+        snap_map[(s.date, s.account_id)] = val
 
     # 3. For any stock/crypto account that does not have historical snapshots, 
     # we backfill past days with their current equity so the chart isn't empty!
@@ -134,7 +139,9 @@ def get_daily_portfolios(
             cash = cash_row.cash_balance if cash_row else 0.0
             holdings = db.query(StockHolding).filter(StockHolding.account_id == acc.id).all()
             market_value = sum(h.volume * h.current_price for h in holdings)
-            curr_eq = (cash + market_value) / rate
+            curr_eq = cash + market_value
+            if acc.currency != "USD":
+                curr_eq = curr_eq / rate
         elif acc.account_type == "crypto":
             holdings = db.query(CryptoHolding).filter(CryptoHolding.account_id == acc.id).all()
             curr_eq = sum(h.value_usd for h in holdings)

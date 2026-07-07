@@ -2280,61 +2280,48 @@ function App() {
       const allUnrealizedPnL = allStockHoldings.reduce((s, h) => s + h.pnl, 0);
       return (
         <div className="stock-dashboard">
-          <div className="stats-grid">
-            <div className="stat-card stat-card-featured">
-              <div className="stat-title">💼 มูลค่าพอร์ตหุ้นรวมทั้งหมด</div>
-              <div className="stat-value">{hideBalances ? '••••' : `${allTotalValue.toLocaleString(undefined, { minimumFractionDigits: 2 })} THB`}</div>
-              <div className="stat-desc">{stockAccs.length} พอร์ตหุ้น · เงินสด + มูลค่าหุ้น</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', marginBottom: '24px' }}>
+            <div className="stat-card" style={{ 
+              flex: '1.5 1 300px', 
+              border: '1.5px solid var(--accent-secondary)', 
+              background: 'linear-gradient(135deg, rgba(0, 255, 209, 0.06) 0%, rgba(18, 20, 32, 0.95) 100%)',
+              boxShadow: '0 0 25px rgba(0, 255, 209, 0.1)'
+            }}>
+              <div className="stat-label" style={{ color: 'var(--accent-secondary)', fontWeight: '700', fontSize: '1rem' }}>💼 มูลค่าพอร์ตหุ้นรวมทั้งหมด</div>
+              <div className="stat-value" style={{ fontSize: '2.4rem', fontWeight: '800', color: '#fff', margin: '8px 0 4px 0' }}>
+                {hideBalances ? '••••' : `${allTotalValue.toLocaleString(undefined, { minimumFractionDigits: 2 })} THB`}
+              </div>
+              <div className="stat-desc" style={{ fontSize: '0.85rem' }}>{stockAccs.length} พอร์ตหุ้น · เงินสด + มูลค่าหุ้น</div>
             </div>
-            <div className="stat-card">
-              <div className="stat-title">💵 เงินสดรวม</div>
-              <div className="stat-value">{hideBalances ? '••••' : `${allStockCashTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })} THB`}</div>
+            
+            <div className="stat-card" style={{ flex: '1 1 200px' }}>
+              <div className="stat-label">💵 เงินสดรวม</div>
+              <div className="stat-value" style={{ fontSize: '1.6rem', fontWeight: '700' }}>
+                {hideBalances ? '••••' : `${allStockCashTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })} THB`}
+              </div>
               <div className="stat-desc">Cash across all portfolios</div>
             </div>
-            <div className="stat-card">
-              <div className="stat-title">📈 มูลค่าหุ้นรวม (Market Value)</div>
-              <div className="stat-value">{hideBalances ? '••••' : `${allMarketValue.toLocaleString(undefined, { minimumFractionDigits: 2 })} THB`}</div>
+            
+            <div className="stat-card" style={{ flex: '1 1 200px' }}>
+              <div className="stat-label">📈 มูลค่าหุ้นรวม (Market Value)</div>
+              <div className="stat-value" style={{ fontSize: '1.6rem', fontWeight: '700' }}>
+                {hideBalances ? '••••' : `${allMarketValue.toLocaleString(undefined, { minimumFractionDigits: 2 })} THB`}
+              </div>
               <div className="stat-desc">{allStockHoldings.length} รายการถือครอง</div>
             </div>
-            <div className="stat-card">
-              <div className="stat-title">📊 กำไร/ขาดทุนสะสม (Unrealized)</div>
-              <div className="stat-value" style={{ color: allUnrealizedPnL >= 0 ? 'var(--success)' : 'var(--error)' }}>
+            
+            <div className="stat-card" style={{ flex: '1 1 200px' }}>
+              <div className="stat-label">📊 กำไร/ขาดทุนสะสม (Unrealized)</div>
+              <div className="stat-value" style={{ fontSize: '1.6rem', fontWeight: '700', color: allUnrealizedPnL >= 0 ? 'var(--success)' : 'var(--error)' }}>
                 {hideBalances ? '••••' : `${allUnrealizedPnL >= 0 ? '+' : ''}${allUnrealizedPnL.toLocaleString(undefined, { minimumFractionDigits: 2 })} THB`}
               </div>
               <div className="stat-desc">Unrealized PnL รวม</div>
             </div>
           </div>
-          <div className="section-box" style={{ marginTop: '24px' }}>
-            <div className="section-title">
-              <span>📋 หุ้นทั้งหมดในพอร์ต (All Holdings)</span>
-              <span className="badge" style={{ background: 'rgba(0,255,209,0.1)', color: 'var(--accent-secondary)' }}>{allStockHoldings.length} รายการ</span>
-            </div>
-            <div className="table-wrapper">
-              <table className="custom-table">
-                <thead><tr>
-                  <th>พอร์ต</th><th>หุ้น (Symbol)</th><th style={{ textAlign: 'right' }}>จำนวนหุ้น</th>
-                  <th style={{ textAlign: 'right' }}>ราคาทุน</th><th style={{ textAlign: 'right' }}>ราคาล่าสุด</th>
-                  <th style={{ textAlign: 'right' }}>มูลค่า (THB)</th><th style={{ textAlign: 'right' }}>กำไร/ขาดทุน</th>
-                </tr></thead>
-                <tbody>
-                  {allStockHoldings.map((h, i) => (
-                    <tr key={i}>
-                      <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{h.account_name}</td>
-                      <td style={{ fontWeight: '700', color: 'var(--accent-secondary)' }}>{h.symbol}</td>
-                      <td style={{ textAlign: 'right' }}>{h.volume.toLocaleString()}</td>
-                      <td style={{ textAlign: 'right' }}>{h.avg_cost ? h.avg_cost.toFixed(2) : '-'}</td>
-                      <td style={{ textAlign: 'right' }}>{h.current_price ? h.current_price.toFixed(2) : '-'}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{hideBalances ? '••••' : (h.volume * h.current_price).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 'bold', color: h.pnl >= 0 ? 'var(--success)' : 'var(--error)' }}>
-                        {hideBalances ? '••••' : `${h.pnl >= 0 ? '+' : ''}${h.pnl.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-                      </td>
-                    </tr>
-                  ))}
-                  {allStockHoldings.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>ไม่มีหุ้นในพอร์ต</td></tr>}
-                </tbody>
-              </table>
-            </div>
-          </div>
+
+          {/* Daily Stock Net Worth Line Chart */}
+          {renderAssetDailyChart('stock', 'Stocks')}
+
           <div className="section-box" style={{ marginTop: '24px' }}>
             <div className="section-title">
               <span>📊 สรุปแต่ละพอร์ตหุ้น (Portfolio Breakdown)</span>
@@ -2370,8 +2357,38 @@ function App() {
               </table>
             </div>
           </div>
-          {/* Daily Stock Net Worth Line Chart */}
-          {renderAssetDailyChart('stock', 'Stocks')}
+
+          <div className="section-box" style={{ marginTop: '24px' }}>
+            <div className="section-title">
+              <span>📋 หุ้นทั้งหมดในพอร์ต (All Holdings)</span>
+              <span className="badge" style={{ background: 'rgba(0,255,209,0.1)', color: 'var(--accent-secondary)' }}>{allStockHoldings.length} รายการ</span>
+            </div>
+            <div className="table-wrapper">
+              <table className="custom-table">
+                <thead><tr>
+                  <th>พอร์ต</th><th>หุ้น (Symbol)</th><th style={{ textAlign: 'right' }}>จำนวนหุ้น</th>
+                  <th style={{ textAlign: 'right' }}>ราคาทุน</th><th style={{ textAlign: 'right' }}>ราคาล่าสุด</th>
+                  <th style={{ textAlign: 'right' }}>มูลค่า (THB)</th><th style={{ textAlign: 'right' }}>กำไร/ขาดทุน</th>
+                </tr></thead>
+                <tbody>
+                  {allStockHoldings.map((h, i) => (
+                    <tr key={i}>
+                      <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{h.account_name}</td>
+                      <td style={{ fontWeight: '700', color: 'var(--accent-secondary)' }}>{h.symbol}</td>
+                      <td style={{ textAlign: 'right' }}>{h.volume.toLocaleString()}</td>
+                      <td style={{ textAlign: 'right' }}>{h.avg_cost ? h.avg_cost.toFixed(2) : '-'}</td>
+                      <td style={{ textAlign: 'right' }}>{h.current_price ? h.current_price.toFixed(2) : '-'}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{hideBalances ? '••••' : (h.volume * h.current_price).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 'bold', color: h.pnl >= 0 ? 'var(--success)' : 'var(--error)' }}>
+                        {hideBalances ? '••••' : `${h.pnl >= 0 ? '+' : ''}${h.pnl.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                      </td>
+                    </tr>
+                  ))}
+                  {allStockHoldings.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>ไม่มีหุ้นในพอร์ต</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       );
     }
@@ -2655,23 +2672,89 @@ function App() {
       const cryptoAccs = accounts.filter(a => a.account_type === 'crypto');
       const allCryptoTotal = allCryptoHoldings.reduce((s, h) => s + h.value_usd, 0);
       const rate = usdThbRate || 33.0;
+
+      const stableCoinSymbols = ['USDT', 'USDC', 'BUSD', 'DAI', 'FDUSD'];
+      const stableCoinsTotal = allCryptoHoldings
+        .filter(h => stableCoinSymbols.includes(h.symbol.toUpperCase()))
+        .reduce((s, h) => s + h.value_usd, 0);
+      const otherCoinsTotal = allCryptoHoldings
+        .filter(h => !stableCoinSymbols.includes(h.symbol.toUpperCase()))
+        .reduce((s, h) => s + h.value_usd, 0);
+
       return (
         <div className="crypto-dashboard">
-          <div className="stats-grid">
-            <div className="stat-card stat-card-featured">
-              <div className="stat-title">🪙 มูลค่าพอร์ตคริปโตรวมทั้งหมด</div>
-              <div className="stat-value">{hideBalances ? '••••' : `$${allCryptoTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}</div>
-              <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', marginBottom: '32px' }}>
+            <div className="stat-card" style={{ 
+              flex: '1.5 1 300px', 
+              border: '1.5px solid var(--accent-secondary)', 
+              background: 'linear-gradient(135deg, rgba(0, 255, 209, 0.06) 0%, rgba(18, 20, 32, 0.95) 100%)',
+              boxShadow: '0 0 25px rgba(0, 255, 209, 0.1)'
+            }}>
+              <div className="stat-label" style={{ color: 'var(--accent-secondary)', fontWeight: '700', fontSize: '1rem' }}>🪙 มูลค่าพอร์ตคริปโตรวมทั้งหมด</div>
+              <div className="stat-value" style={{ fontSize: '2.4rem', fontWeight: '800', color: '#fff', margin: '8px 0 4px 0' }}>
+                {hideBalances ? '••••' : `$${allCryptoTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+              </div>
+              <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
                 {hideBalances ? '••••' : `≈ ฿${(allCryptoTotal * rate).toLocaleString(undefined, { maximumFractionDigits: 0 })} THB`}
               </div>
-              <div className="stat-desc">{cryptoAccs.length} กระเป๋า / Exchange</div>
+              <div className="stat-desc" style={{ marginTop: '4px' }}>{cryptoAccs.length} กระเป๋า / Exchange</div>
             </div>
-            <div className="stat-card">
-              <div className="stat-title">🔗 จำนวนกระเป๋า</div>
-              <div className="stat-value">{cryptoAccs.length}</div>
-              <div className="stat-desc">{allCryptoHoldings.length} รายการเหรียญทั้งหมด</div>
+
+            <div className="stat-card" style={{ flex: '1 1 200px' }}>
+              <div className="stat-label">💵 มูลค่า Stablecoins (USDT, USDC, ...)</div>
+              <div className="stat-value" style={{ fontSize: '1.6rem', fontWeight: '700', color: '#10b981' }}>
+                {hideBalances ? '••••' : `$${stableCoinsTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+              </div>
+              <div className="stat-desc">
+                {hideBalances ? '••••' : `≈ ฿${(stableCoinsTotal * rate).toLocaleString(undefined, { maximumFractionDigits: 0 })} THB`}
+              </div>
+            </div>
+
+            <div className="stat-card" style={{ flex: '1 1 200px' }}>
+              <div className="stat-label">📈 มูลค่าเหรียญอื่นๆ (BTC, ETH, ...)</div>
+              <div className="stat-value" style={{ fontSize: '1.6rem', fontWeight: '700', color: 'var(--accent-primary)' }}>
+                {hideBalances ? '••••' : `$${otherCoinsTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+              </div>
+              <div className="stat-desc">
+                {hideBalances ? '••••' : `≈ ฿${(otherCoinsTotal * rate).toLocaleString(undefined, { maximumFractionDigits: 0 })} THB`}
+              </div>
             </div>
           </div>
+
+          {/* Daily Crypto Net Worth Line Chart */}
+          {renderAssetDailyChart('crypto', 'Crypto')}
+
+          <div className="section-box" style={{ marginTop: '24px' }}>
+            <div className="section-title">
+              <span>📊 สรุปแต่ละกระเป๋า (Wallet Breakdown)</span>
+              <span className="badge" style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981' }}>{cryptoAccs.length} กระเป๋า</span>
+            </div>
+            <div className="table-wrapper">
+              <table className="custom-table">
+                <thead><tr>
+                  <th>ชื่อกระเป๋า / Exchange</th>
+                  <th>แพลตฟอร์ม</th>
+                  <th style={{ textAlign: 'right' }}>มูลค่า (USD)</th>
+                  <th style={{ textAlign: 'right' }}>มูลค่า (THB)</th>
+                </tr></thead>
+                <tbody>
+                  {cryptoAccs.map(acc => (
+                    <tr key={acc.id}>
+                      <td style={{ fontWeight: '600' }}>{acc.account_name}</td>
+                      <td>{acc.broker_name}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--accent-secondary)' }}>
+                        {hideBalances ? '••••' : `$${acc.equity.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                      </td>
+                      <td style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>
+                        {hideBalances ? '••••' : `฿${(acc.equity * rate).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
           <div className="section-box" style={{ marginTop: '24px' }}>
             <div className="section-title">
               <span>📋 เหรียญทั้งหมดในทุกกระเป๋า (All Holdings)</span>
@@ -2707,38 +2790,6 @@ function App() {
               </table>
             </div>
           </div>
-          <div className="section-box" style={{ marginTop: '24px' }}>
-            <div className="section-title">
-              <span>📊 สรุปแต่ละกระเป๋า (Wallet Breakdown)</span>
-              <span className="badge" style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981' }}>{cryptoAccs.length} กระเป๋า</span>
-            </div>
-            <div className="table-wrapper">
-              <table className="custom-table">
-                <thead><tr>
-                  <th>ชื่อกระเป๋า / Exchange</th>
-                  <th>แพลตฟอร์ม</th>
-                  <th style={{ textAlign: 'right' }}>มูลค่า (USD)</th>
-                  <th style={{ textAlign: 'right' }}>มูลค่า (THB)</th>
-                </tr></thead>
-                <tbody>
-                  {cryptoAccs.map(acc => (
-                    <tr key={acc.id}>
-                      <td style={{ fontWeight: '600' }}>{acc.account_name}</td>
-                      <td>{acc.broker_name}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--accent-secondary)' }}>
-                        {hideBalances ? '••••' : `$${acc.equity.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-                      </td>
-                      <td style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>
-                        {hideBalances ? '••••' : `฿${(acc.equity * rate).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-          {/* Daily Crypto Net Worth Line Chart */}
-          {renderAssetDailyChart('crypto', 'Crypto')}
         </div>
       );
     }
@@ -3324,61 +3375,65 @@ function App() {
               </div>
             </div>
 
-            {/* Growth Curve Chart */}
-            <div className="section-box" style={{ marginBottom: '32px' }}>
-              <div className="section-title">
-                <span>กราฟการเติบโตพอร์ตการเทรด (Growth & Equity Curve)</span>
-                <span style={{ fontSize: '0.85rem', fontWeight: '500', color: 'var(--text-secondary)' }}>
-                  แสดงค่า Balance และ Equity ปิดดีลรายวัน
-                </span>
-              </div>
-              
-              <div style={{ width: '100%', height: 350 }}>
-                <ResponsiveContainer>
-                  <AreaChart data={filteredEquityCurve} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="var(--accent-primary)" stopOpacity={0.2}/>
-                        <stop offset="95%" stopColor="var(--accent-primary)" stopOpacity={0}/>
-                      </linearGradient>
-                      <linearGradient id="colorEquity" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="var(--accent-secondary)" stopOpacity={0.15}/>
-                        <stop offset="95%" stopColor="var(--accent-secondary)" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                    <XAxis dataKey="date" stroke="var(--text-muted)" fontSize={11} tickLine={false} />
-                    <YAxis hide={hideBalances} stroke="var(--text-muted)" fontSize={11} tickLine={false} />
-                    <Tooltip 
-                      contentStyle={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-color)', borderRadius: '8px' }}
-                      labelStyle={{ color: '#fff', fontWeight: '600' }}
-                      formatter={(value, name, props) => {
-                        if (hideBalances) {
-                          return ['••••', name];
-                        }
-                        const payload = props.payload;
-                        const formattedVal = `${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${advancedStats.currency}`;
-                        if (name === "Balance" && payload) {
-                          const txType = payload.transaction_type || payload.transactionType;
-                          const txAmt = payload.transaction_amount || payload.transactionAmount;
-                          if (txType) {
-                            const prefix = txType === 'deposit' ? '📥 ฝากเงิน' : '📤 ถอนเงิน';
-                            const sign = txType === 'deposit' ? '+' : '-';
-                            return [
-                              `${formattedVal} (${prefix}: ${sign}${Number(txAmt).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${advancedStats.currency})`,
-                              name
-                            ];
+            {/* Growth Curve Chart / Daily Forex Net Worth */}
+            {selectedAccountId === 'all' ? (
+              renderAssetDailyChart('forex', 'Forex')
+            ) : (
+              <div className="section-box" style={{ marginBottom: '32px' }}>
+                <div className="section-title">
+                  <span>กราฟการเติบโตพอร์ตการเทรด (Growth & Equity Curve)</span>
+                  <span style={{ fontSize: '0.85rem', fontWeight: '500', color: 'var(--text-secondary)' }}>
+                    แสดงค่า Balance และ Equity ปิดดีลรายวัน
+                  </span>
+                </div>
+                
+                <div style={{ width: '100%', height: 350 }}>
+                  <ResponsiveContainer>
+                    <AreaChart data={filteredEquityCurve} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="var(--accent-primary)" stopOpacity={0.2}/>
+                          <stop offset="95%" stopColor="var(--accent-primary)" stopOpacity={0}/>
+                        </linearGradient>
+                        <linearGradient id="colorEquity" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="var(--accent-secondary)" stopOpacity={0.15}/>
+                          <stop offset="95%" stopColor="var(--accent-secondary)" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                      <XAxis dataKey="date" stroke="var(--text-muted)" fontSize={11} tickLine={false} />
+                      <YAxis hide={hideBalances} stroke="var(--text-muted)" fontSize={11} tickLine={false} />
+                      <Tooltip 
+                        contentStyle={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-color)', borderRadius: '8px' }}
+                        labelStyle={{ color: '#fff', fontWeight: '600' }}
+                        formatter={(value, name, props) => {
+                          if (hideBalances) {
+                            return ['••••', name];
                           }
-                        }
-                        return [formattedVal, name];
-                      }}
-                    />
-                    <Area type="monotone" dataKey="balance" stroke="var(--accent-primary)" strokeWidth={2} fillOpacity={1} fill="url(#colorBalance)" name="Balance" dot={renderCustomDot} activeDot={{ r: 8 }} />
-                    <Area type="monotone" dataKey="equity" stroke="var(--accent-secondary)" strokeWidth={1.5} fillOpacity={1} fill="url(#colorEquity)" name="Equity" />
-                  </AreaChart>
-                </ResponsiveContainer>
+                          const payload = props.payload;
+                          const formattedVal = `${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${advancedStats.currency}`;
+                          if (name === "Balance" && payload) {
+                            const txType = payload.transaction_type || payload.transactionType;
+                            const txAmt = payload.transaction_amount || payload.transactionAmount;
+                            if (txType) {
+                              const prefix = txType === 'deposit' ? '📥 ฝากเงิน' : '📤 ถอนเงิน';
+                              const sign = txType === 'deposit' ? '+' : '-';
+                              return [
+                                `${formattedVal} (${prefix}: ${sign}${Number(txAmt).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${advancedStats.currency})`,
+                                name
+                              ];
+                            }
+                          }
+                          return [formattedVal, name];
+                        }}
+                      />
+                      <Area type="monotone" dataKey="balance" stroke="var(--accent-primary)" strokeWidth={2} fillOpacity={1} fill="url(#colorBalance)" name="Balance" dot={renderCustomDot} activeDot={{ r: 8 }} />
+                      <Area type="monotone" dataKey="equity" stroke="var(--accent-secondary)" strokeWidth={1.5} fillOpacity={1} fill="url(#colorEquity)" name="Equity" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Calendar & Details Grid */}
             <div className="sections-grid">
