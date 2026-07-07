@@ -1956,12 +1956,38 @@ function App() {
   }
 
   const renderNetWorthTab = () => {
+    const rate = usdThbRate || 33.0;
+
+    const getAccountBalances = (acc) => {
+      let balanceUSD = 0;
+      let balanceTHB = 0;
+      
+      if (acc.account_type === 'stock') {
+        const isUSD = acc.currency === 'USD';
+        if (isUSD) {
+          balanceUSD = acc.balance;
+          balanceTHB = acc.balance * rate;
+        } else {
+          balanceTHB = acc.balance;
+          balanceUSD = acc.balance / rate;
+        }
+      } else if (acc.account_type === 'crypto') {
+        balanceUSD = acc.balance;
+        balanceTHB = acc.balance * rate;
+      } else { // Forex
+        const isCent = isCentCurrency(acc.currency);
+        balanceUSD = isCent ? acc.balance / 100 : acc.balance;
+        balanceTHB = balanceUSD * rate;
+      }
+      
+      return { usd: balanceUSD, thb: balanceTHB };
+    };
+
     const forexAccs = accounts.filter(a => !a.account_type || a.account_type === 'forex');
     const stockAccs = accounts.filter(a => a.account_type === 'stock');
     const cryptoAccs = accounts.filter(a => a.account_type === 'crypto');
 
     const forexTotal = forexAccs.reduce((sum, a) => sum + (isCentCurrency(a.currency) ? a.balance / 100 : a.balance), 0);
-    const rate = usdThbRate || 33.0;
     const stockTotal = stockAccs.reduce((sum, a) => {
       const isUSD = a.currency === 'USD';
       return sum + (isUSD ? a.balance * rate : a.balance);
@@ -1994,9 +2020,9 @@ function App() {
       if (nwSortKey === 'account_name') { va = a.account_name?.toLowerCase(); vb = b.account_name?.toLowerCase(); }
       else if (nwSortKey === 'account_type') { va = (a.account_type || 'forex'); vb = (b.account_type || 'forex'); }
       else if (nwSortKey === 'broker_name') { va = a.broker_name?.toLowerCase(); vb = b.broker_name?.toLowerCase(); }
-      else if (nwSortKey === 'equity') {
-        va = isCentCurrency(a.currency) ? a.balance / 100 : a.balance;
-        vb = isCentCurrency(b.currency) ? b.balance / 100 : b.balance;
+      else if (nwSortKey === 'equity' || nwSortKey === 'balance') {
+        va = getAccountBalances(a).usd;
+        vb = getAccountBalances(b).usd;
       }
       if (va < vb) return nwSortDir === 'asc' ? -1 : 1;
       if (va > vb) return nwSortDir === 'asc' ? 1 : -1;
@@ -2240,40 +2266,64 @@ function App() {
               <table className="custom-table">
                 <thead>
                   <tr>
-                    <th style={thStyle('account_name')} onClick={() => handleNwSort('account_name')}>
-                      ชื่อพอร์ต (Friendly Name)<SortIcon col="account_name" />
-                    </th>
                     <th style={thStyle('account_type')} onClick={() => handleNwSort('account_type')}>
                       ประเภทสินทรัพย์<SortIcon col="account_type" />
                     </th>
                     <th style={thStyle('broker_name')} onClick={() => handleNwSort('broker_name')}>
                       โบรกเกอร์ / แพลตฟอร์ม<SortIcon col="broker_name" />
                     </th>
-                    <th style={{ ...thStyle('equity'), textAlign: 'right' }} onClick={() => handleNwSort('equity')}>
-                      มูลค่าสุทธิ์ (Balance)<SortIcon col="equity" />
+                    <th style={thStyle('account_name')} onClick={() => handleNwSort('account_name')}>
+                      ชื่อพอร์ต<SortIcon col="account_name" />
+                    </th>
+                    <th>
+                      เลขบัญชี / ที่อยู่
+                    </th>
+                    <th style={{ ...thStyle('balance'), textAlign: 'right' }} onClick={() => handleNwSort('balance')}>
+                      มูลค่าสุทธิ (THB)<SortIcon col="balance" />
+                    </th>
+                    <th style={{ ...thStyle('balance'), textAlign: 'right' }} onClick={() => handleNwSort('balance')}>
+                      มูลค่าสุทธิ (USD)<SortIcon col="balance" />
                     </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedAccounts.map(acc => (
-                    <tr key={acc.id}>
-                      <td style={{ fontWeight: '600' }}>{acc.account_name}</td>
-                      <td>
-                        <span
-                          className={`badge ${acc.account_type === 'stock' ? 'badge-success' : acc.account_type === 'crypto' ? 'badge-secondary' : 'badge-info'}`}
-                          style={{ textTransform: 'uppercase', fontSize: '0.75rem' }}
-                        >
-                          {acc.account_type || 'FOREX'}
-                        </span>
+                  {sortedAccounts.map(acc => {
+                    const { usd, thb } = getAccountBalances(acc);
+                    return (
+                      <tr key={acc.id}>
+                        <td>
+                          <span
+                            className={`badge ${acc.account_type === 'stock' ? 'badge-success' : acc.account_type === 'crypto' ? 'badge-secondary' : 'badge-info'}`}
+                            style={{ textTransform: 'uppercase', fontSize: '0.75rem' }}
+                          >
+                            {acc.account_type || 'FOREX'}
+                          </span>
+                        </td>
+                        <td>{acc.broker_name}</td>
+                        <td style={{ fontWeight: '600' }}>{acc.account_name}</td>
+                        <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{acc.account_number || '-'}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--success)' }}>
+                          {hideBalances ? '••••' : `฿${thb.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                        </td>
+                        <td style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--accent-secondary)' }}>
+                          {hideBalances ? '••••' : `$${usd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {accounts.length > 0 && (
+                    <tr style={{ background: 'rgba(255,255,255,0.04)', fontWeight: 'bold' }}>
+                      <td colSpan={4} style={{ textAlign: 'left', padding: '12px 16px', color: '#fff' }}>รวมทุกพอร์ต (Total)</td>
+                      <td style={{ textAlign: 'right', color: 'var(--success)', fontSize: '1.05rem', borderTop: '2px double var(--border-color)' }}>
+                        {hideBalances ? '••••' : `฿${totalNetWorthTHB.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                       </td>
-                      <td>{acc.broker_name}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 'bold', color: acc.account_type === 'stock' ? '#f59e0b' : acc.account_type === 'crypto' ? '#10b981' : '#818cf8' }}>
-                        {hideBalances ? '••••' : `${(isCentCurrency(acc.currency) ? acc.balance / 100 : acc.balance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${acc.currency}`}
+                      <td style={{ textAlign: 'right', color: 'var(--accent-secondary)', fontSize: '1.05rem', borderTop: '2px double var(--border-color)' }}>
+                        {hideBalances ? '••••' : `$${totalNetWorthUSD.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                       </td>
                     </tr>
-                  ))}
+                  )}
                   {accounts.length === 0 && (
-                    <tr><td colSpan={4} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>ไม่มีพอร์ตการลงทุนในระบบ</td></tr>
+                    <tr><td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>ไม่มีพอร์ตการลงทุนในระบบ</td></tr>
                   )}
                 </tbody>
               </table>
