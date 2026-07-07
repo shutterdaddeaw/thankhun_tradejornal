@@ -2284,6 +2284,116 @@ function App() {
     );
   };
 
+  const renderAccountHeaderDetails = () => {
+    if (!selectedAccountId || selectedAccountId === 'all' || selectedAccountId === 'all-stock' || selectedAccountId === 'all-crypto') {
+      return null;
+    }
+    const acc = accounts.find(a => a.id.toString() === selectedAccountId);
+    if (!acc) return null;
+
+    let connTypeLabel = '';
+    if (acc.account_type === 'stock') {
+      connTypeLabel = acc.connection_type === 'webull_api' ? '⚡ Webull Open API' : '📝 Manual Input';
+    } else if (acc.account_type === 'crypto') {
+      const addr = (acc.account_number || '').trim();
+      const isAuto = addr.length >= 32;
+      connTypeLabel = isAuto ? '🔗 Blockchain Auto-Sync' : '📝 Manual Input';
+    } else {
+      connTypeLabel = acc.connection_type === 'publisher_ea' ? '🤖 MT5 Publisher EA' : '🔗 Broker Direct Sync';
+    }
+
+    return (
+      <div className="section-box" style={{ 
+        marginBottom: '20px', 
+        background: 'linear-gradient(135deg, rgba(18, 20, 32, 0.95) 0%, rgba(30, 34, 54, 0.95) 100%)', 
+        border: '1.5px solid var(--border-color)', 
+        borderRadius: '12px',
+        padding: '16px 20px',
+        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)'
+      }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+          
+          <div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              💼 {acc.account_type === 'crypto' ? 'ชื่อกระเป๋า' : 'ชื่อพอร์ต'}
+            </div>
+            <div style={{ fontSize: '1.1rem', fontWeight: '700', color: 'var(--accent-secondary)' }}>
+              {acc.account_name}
+            </div>
+          </div>
+
+          <div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              {acc.account_type === 'crypto' ? '🏦 แพลตฟอร์ม / เครือข่าย' : '🏦 โบรกเกอร์'}
+            </div>
+            <div style={{ fontSize: '1.1rem', fontWeight: '700', color: '#fff' }}>
+              {acc.broker_name}
+            </div>
+          </div>
+
+          <div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              {acc.account_type === 'crypto' ? '🔑 ที่อยู่กระเป๋า (Address)' : '🔑 เลขบัญชี / เลขพอร์ต'}
+            </div>
+            <div style={{ fontSize: '1.1rem', fontWeight: '700', color: '#fff', fontFamily: 'monospace', wordBreak: 'break-all' }}>
+              {acc.account_number || '-'}
+            </div>
+          </div>
+
+          {acc.account_type === 'forex' && (
+            <>
+              <div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  🖥️ Server
+                </div>
+                <div style={{ fontSize: '1.1rem', fontWeight: '700', color: '#fff' }}>
+                  {acc.server_name || '-'}
+                </div>
+              </div>
+
+              <div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  ⚖️ Leverage
+                </div>
+                <div style={{ fontSize: '1.1rem', fontWeight: '700', color: '#fff' }}>
+                  1:{acc.leverage || 100}
+                </div>
+              </div>
+            </>
+          )}
+
+          <div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              🪙 สกุลเงินพอร์ต
+            </div>
+            <div style={{ fontSize: '1.1rem', fontWeight: '700', color: '#fff' }}>
+              {acc.currency}
+            </div>
+          </div>
+
+          <div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              ⚡ การเชื่อมต่อข้อมูล
+            </div>
+            <div style={{ display: 'inline-flex', alignItems: 'center', marginTop: '2px' }}>
+              <span className="badge" style={{ 
+                background: 'rgba(0, 255, 209, 0.1)', 
+                color: 'var(--accent-secondary)', 
+                padding: '4px 10px', 
+                borderRadius: '6px', 
+                fontSize: '0.8rem',
+                fontWeight: '600'
+              }}>
+                {connTypeLabel}
+              </span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    );
+  };
+
   const renderStockTab = () => {
     // Combined view for all stock portfolios
     if (selectedAccountId === 'all-stock') {
@@ -3176,6 +3286,7 @@ function App() {
             </div>
           </div>
         )}
+        {page !== 'public' && renderAccountHeaderDetails()}
         {page !== 'public' && activeTab === 'networth' && renderNetWorthTab()}
         {page !== 'public' && activeTab === 'stock' && renderStockTab()}
         {page !== 'public' && activeTab === 'crypto' && renderCryptoTab()}
@@ -3859,7 +3970,19 @@ function App() {
                           <td style={{ fontWeight: '600', color: deal.magic ? 'var(--accent-secondary)' : 'var(--text-muted)' }}>
                             {deal.magic || (page === 'public' ? '-' : 'Manual')}
                           </td>
-                          <td style={{ fontFamily: 'monospace' }}>{deal.ticket}</td>
+                          <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
+                            <div style={{ fontWeight: '600' }} title="Deal Ticket (เลขดีลบันทึกของ MT5)">Deal: {deal.ticket}</div>
+                            {deal.order_ticket && (
+                              <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }} title="Order Ticket (เลขคำสั่งซื้อขาย)">
+                                Order: {deal.order_ticket}
+                              </div>
+                            )}
+                            {deal.position_ticket && (
+                              <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }} title="Position Ticket (เลขสถานะออเดอร์)">
+                                Pos: {deal.position_ticket}
+                              </div>
+                            )}
+                          </td>
                           <td style={{ fontWeight: '600' }}>{deal.symbol || 'Balance Op'}</td>
                           <td>
                             <span className={`badge ${deal.type === 'buy' ? 'badge-success' : (deal.type === 'sell' ? 'badge-error' : '')}`} style={{ background: deal.type === 'balance' ? 'rgba(255,255,255,0.06)' : undefined, color: deal.type === 'balance' ? 'var(--text-secondary)' : undefined }}>
