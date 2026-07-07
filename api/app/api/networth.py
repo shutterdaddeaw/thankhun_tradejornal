@@ -119,34 +119,34 @@ def get_daily_portfolios(
         )
     ).order_by(DailyEquitySnapshot.date).all()
 
-    # Build map of (date, account_id) -> equity (converting cent accounts to USD)
+    # Build map of (date, account_id) -> balance (converting cent accounts to USD)
     snap_map = {}
     account_dict = {a.id: a for a in accounts}
     for s in snapshots:
         acc = account_dict.get(s.account_id)
-        val = s.equity
+        val = s.balance if s.balance is not None else s.equity
         if acc and _is_cent(acc.currency or ""):
             val = val / 100.0
         snap_map[(s.date, s.account_id)] = val
 
     # 3. For any stock/crypto account that does not have historical snapshots, 
-    # we backfill past days with their current equity so the chart isn't empty!
+    # we backfill past days with their current balance so the chart isn't empty!
     rate = get_usd_thb_rate()
     for acc in accounts:
-        # Calculate current equity in USD
+        # Calculate current balance/equity in USD
         if acc.account_type == "stock":
             cash_row = db.query(StockCashBalance).filter(StockCashBalance.account_id == acc.id).first()
             cash = cash_row.cash_balance if cash_row else 0.0
             holdings = db.query(StockHolding).filter(StockHolding.account_id == acc.id).all()
             market_value = sum(h.volume * h.current_price for h in holdings)
-            curr_eq = cash + market_value
+            curr_val = cash + market_value
             if acc.currency != "USD":
-                curr_eq = curr_eq / rate
+                curr_val = curr_val / rate
         elif acc.account_type == "crypto":
             holdings = db.query(CryptoHolding).filter(CryptoHolding.account_id == acc.id).all()
-            curr_eq = sum(h.value_usd for h in holdings)
-        else: # Forex
-            curr_eq = acc.equity / 100 if _is_cent(acc.currency) else acc.equity
+            curr_val = sum(h.value_usd for h in holdings)
+        else: # Forex (Native raw balance/equity)
+            curr_val = acc.balance if acc.balance is not None else acc.equity
 
         # Fill map for every day of the month if missing
         days_in_month = calendar.monthrange(year, month)[1]
@@ -159,15 +159,19 @@ def get_daily_portfolios(
                         new_snap = DailyEquitySnapshot(
                             account_id=acc.id,
                             date=d,
-                            balance=curr_eq,
-                            equity=curr_eq
+                            balance=curr_val,
+                            equity=curr_val
                         )
                         db.add(new_snap)
                         db.commit()
-                        snap_map[(d, acc.id)] = curr_eq
+                        
+                        # Store converted USD value in the snap_map for Recharts!
+                        val_usd = curr_val / 100.0 if _is_cent(acc.currency) else curr_val
+                        snap_map[(d, acc.id)] = val_usd
                     except Exception:
                         db.rollback()
-                        snap_map[(d, acc.id)] = curr_eq # Fallback to in-memory
+                        val_usd = curr_val / 100.0 if _is_cent(acc.currency) else curr_val
+                        snap_map[(d, acc.id)] = val_usd # Fallback to in-memory
 
     # 4. Format days for Recharts
     days_in_month = calendar.monthrange(year, month)[1]

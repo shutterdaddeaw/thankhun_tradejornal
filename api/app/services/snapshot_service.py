@@ -84,8 +84,8 @@ def take_snapshot_for_user(db: Session, user_id: int, snap_date: date = None) ->
     # ── Individual Account Snapshots ──
     for acc in accounts:
         if not acc.account_type or acc.account_type == "forex":
-            acc_eq = acc.equity / 100 if _is_cent(acc.currency) else acc.equity
-            acc_bal = acc.balance / 100 if _is_cent(acc.currency) else acc.balance
+            acc_eq = acc.equity
+            acc_bal = acc.balance
         elif acc.account_type == "stock":
             cash_row = db.query(StockCashBalance).filter(StockCashBalance.account_id == acc.id).first()
             cash = cash_row.cash_balance if cash_row else 0.0
