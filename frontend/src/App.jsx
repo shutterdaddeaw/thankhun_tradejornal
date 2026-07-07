@@ -860,8 +860,14 @@ function App() {
   };
 
   const renderAssetDailyChart = (assetType, assetLabel) => {
-    // Filter account metadata matching this assetType
-    const matchingAccounts = dailyPortfoliosAccounts.filter(acc => acc.account_type === assetType);
+    // Filter account metadata matching this assetType (only show selected account if not in combined view)
+    const matchingAccounts = dailyPortfoliosAccounts.filter(acc => {
+      if (acc.account_type !== assetType) return false;
+      if (selectedAccountId !== 'all' && selectedAccountId !== 'all-stock' && selectedAccountId !== 'all-crypto') {
+        return acc.id.toString() === selectedAccountId.toString();
+      }
+      return true;
+    });
     
     // Check if there is any data in dailyPortfolios
     const hasData = dailyPortfolios.length > 0 && matchingAccounts.some(acc => 
@@ -2424,59 +2430,67 @@ function App() {
 
     return (
       <div className="stock-dashboard">
-        <div className="stats-grid">
-          <div className="stat-card stat-card-featured" style={{ position: 'relative' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', marginBottom: '24px' }}>
+          <div className="stat-card" style={{ 
+            flex: '1.5 1 300px', 
+            position: 'relative',
+            border: '1.5px solid var(--accent-secondary)', 
+            background: 'linear-gradient(135deg, rgba(0, 255, 209, 0.06) 0%, rgba(18, 20, 32, 0.95) 100%)',
+            boxShadow: '0 0 25px rgba(0, 255, 209, 0.1)'
+          }}>
             {isWebull && (
               <span className="badge" style={{ position: 'absolute', top: '12px', right: '12px', background: 'rgba(16,185,129,0.15)', color: 'var(--success)', fontSize: '0.75rem', fontWeight: 'bold' }}>
                 🔌 Webull API
               </span>
             )}
-            <div className="stat-title">💼 มูลค่าพอร์ตหุ้นทั้งหมด (Total Value)</div>
-            <div className="stat-value">
+            <div className="stat-label" style={{ color: 'var(--accent-secondary)', fontWeight: '700', fontSize: '1rem' }}>💼 มูลค่าพอร์ตหุ้นทั้งหมด (Total Value)</div>
+            <div className="stat-value" style={{ fontSize: '2.4rem', fontWeight: '800', color: '#fff', margin: '8px 0 4px 0' }}>
               {hideBalances ? '••••' : formatCurrency(totalAccountValue)}
             </div>
-            <div className="stat-desc">
+            <div className="stat-desc" style={{ fontSize: '0.85rem' }}>
               {isUSD ? `≈ ${formatCurrency(totalAccountValue, true)}` : 'เงินสด + มูลค่าหุ้นที่ถือครอง'}
             </div>
           </div>
 
-          <div className="stat-card">
-            <div className="stat-title">💵 เงินสดคงเหลือ (Cash Balance)</div>
-            <div className="stat-value">
+          <div className="stat-card" style={{ flex: '1 1 200px' }}>
+            <div className="stat-label">💵 เงินสดคงเหลือ (Cash Balance)</div>
+            <div className="stat-value" style={{ fontSize: '1.6rem', fontWeight: '700' }}>
               {hideBalances ? '••••' : formatCurrency(stockCash)}
             </div>
-            {isUSD && (
-              <div className="stat-desc" style={{ marginBottom: isWebull ? '12px' : '4px' }}>
-                {isUSD ? `≈ ${formatCurrency(stockCash, true)}` : ''}
-              </div>
-            )}
-            {isWebull ? (
-              <button 
-                onClick={() => syncWebullData(activeAcc.id)} 
-                disabled={isSyncingWebull} 
-                className="btn-primary" 
-                style={{ padding: '4px 10px', fontSize: '0.8rem', height: '28px', width: 'auto', display: 'flex', alignItems: 'center', gap: '6px', borderRadius: '6px' }}
-              >
-                {isSyncingWebull ? '⏳ ซิงค์ข้อมูล...' : '🔄 ซิงค์ Webull API'}
-              </button>
-            ) : (
-              <form onSubmit={handleUpdateStockCash} style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-                <input 
-                  type="number" 
-                  step="0.01"
-                  className="form-input" 
-                  style={{ padding: '4px 8px', fontSize: '0.8rem', height: '28px' }} 
-                  value={editStockCashValue} 
-                  onChange={(e) => setEditStockCashValue(e.target.value)} 
-                />
-                <button type="submit" className="btn-secondary" style={{ padding: '0 8px', height: '28px', fontSize: '0.8rem', width: 'auto' }}>อัปเดต</button>
-              </form>
-            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {isUSD && (
+                <div className="stat-desc">
+                  {isUSD ? `≈ ${formatCurrency(stockCash, true)}` : ''}
+                </div>
+              )}
+              {isWebull ? (
+                <button 
+                  onClick={() => syncWebullData(activeAcc.id)} 
+                  disabled={isSyncingWebull} 
+                  className="btn-primary" 
+                  style={{ padding: '4px 10px', fontSize: '0.8rem', height: '28px', width: 'auto', display: 'flex', alignItems: 'center', gap: '6px', borderRadius: '6px', marginTop: '4px' }}
+                >
+                  {isSyncingWebull ? '⏳ ซิงค์ข้อมูล...' : '🔄 ซิงค์ Webull API'}
+                </button>
+              ) : (
+                <form onSubmit={handleUpdateStockCash} style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                  <input 
+                    type="number" 
+                    step="0.01"
+                    className="form-input" 
+                    style={{ padding: '4px 8px', fontSize: '0.8rem', height: '28px' }} 
+                    value={editStockCashValue} 
+                    onChange={(e) => setEditStockCashValue(e.target.value)} 
+                  />
+                  <button type="submit" className="btn-secondary" style={{ padding: '0 8px', height: '28px', fontSize: '0.8rem', width: 'auto' }}>อัปเดต</button>
+                </form>
+              )}
+            </div>
           </div>
 
-          <div className="stat-card">
-            <div className="stat-title">📈 มูลค่าหุ้นถือครอง (Market Value)</div>
-            <div className="stat-value">
+          <div className="stat-card" style={{ flex: '1 1 200px' }}>
+            <div className="stat-label">📈 มูลค่าหุ้นถือครอง (Market Value)</div>
+            <div className="stat-value" style={{ fontSize: '1.6rem', fontWeight: '700' }}>
               {hideBalances ? '••••' : formatCurrency(stockHoldingsValue)}
             </div>
             <div className="stat-desc">
@@ -2484,9 +2498,9 @@ function App() {
             </div>
           </div>
 
-          <div className="stat-card">
-            <div className="stat-title">🟢 กำไรที่ยังไม่เกิดขึ้น (Unrealized PnL)</div>
-            <div className="stat-value" style={{ color: totalUnrealizedPnL >= 0 ? 'var(--success)' : 'var(--error)' }}>
+          <div className="stat-card" style={{ flex: '1 1 200px' }}>
+            <div className="stat-label">🟢 กำไรที่ยังไม่เกิดขึ้น (Unrealized PnL)</div>
+            <div className="stat-value" style={{ fontSize: '1.6rem', fontWeight: '700', color: totalUnrealizedPnL >= 0 ? 'var(--success)' : 'var(--error)' }}>
               {hideBalances ? '••••' : `${totalUnrealizedPnL >= 0 ? '+' : ''}${formatCurrency(totalUnrealizedPnL)}`}
             </div>
             <div className="stat-desc">
@@ -2494,6 +2508,9 @@ function App() {
             </div>
           </div>
         </div>
+
+        {/* Daily Stock Net Worth Line Chart */}
+        {renderAssetDailyChart('stock', 'Stocks')}
 
 
         {selectedStock && stockCandles.length > 0 && (
@@ -2807,24 +2824,70 @@ function App() {
       );
     }
 
+    const rate = usdThbRate || 33.0;
+    const stableCoinSymbols = ['USDT', 'USDC', 'BUSD', 'DAI', 'FDUSD'];
+    const stableCoinsTotal = cryptoHoldings
+      .filter(h => stableCoinSymbols.includes(h.symbol.toUpperCase()))
+      .reduce((s, h) => s + h.value_usd, 0);
+    const otherCoinsTotal = cryptoHoldings
+      .filter(h => !stableCoinSymbols.includes(h.symbol.toUpperCase()))
+      .reduce((s, h) => s + h.value_usd, 0);
     const cryptoTotalValue = cryptoHoldings.reduce((sum, h) => sum + h.value_usd, 0);
 
     return (
       <div className="crypto-dashboard">
-        <div className="stats-grid">
-          <div className="stat-card stat-card-featured">
-            <div className="stat-title">💰 มูลค่าพอร์ตเหรียญรวม (Total Value)</div>
-            <div className="stat-value">
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', marginBottom: '32px' }}>
+          <div className="stat-card" style={{ 
+            flex: '1.5 1 300px', 
+            border: '1.5px solid var(--accent-secondary)', 
+            background: 'linear-gradient(135deg, rgba(0, 255, 209, 0.06) 0%, rgba(18, 20, 32, 0.95) 100%)',
+            boxShadow: '0 0 25px rgba(0, 255, 209, 0.1)'
+          }}>
+            <div className="stat-label" style={{ color: 'var(--accent-secondary)', fontWeight: '700', fontSize: '1rem' }}>🪙 มูลค่าพอร์ตเหรียญรวม (Total Value)</div>
+            <div className="stat-value" style={{ fontSize: '2.4rem', fontWeight: '800', color: '#fff', margin: '8px 0 4px 0' }}>
               {hideBalances ? '••••' : `$${cryptoTotalValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
             </div>
-            <div className="stat-desc">เงินลงทุนรวมดอลลาร์สหรัฐ (USD)</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-title">🔗 ที่อยู่กระเป๋า / Exchange</div>
-            <div className="stat-value" style={{ fontSize: '1.1rem', wordBreak: 'break-all' }}>
-              {activeAcc.account_number}
+            <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+              {hideBalances ? '••••' : `≈ ฿${(cryptoTotalValue * rate).toLocaleString(undefined, { maximumFractionDigits: 0 })} THB`}
             </div>
-            <div className="stat-desc">แพลตฟอร์มหลัก: {activeAcc.broker_name}</div>
+            <div className="stat-desc" style={{ marginTop: '4px' }}>พอร์ตคริปโต · แพลตฟอร์ม: {activeAcc.broker_name}</div>
+          </div>
+
+          <div className="stat-card" style={{ flex: '1 1 200px' }}>
+            <div className="stat-label">💵 มูลค่า Stablecoins (USDT, USDC, ...)</div>
+            <div className="stat-value" style={{ fontSize: '1.6rem', fontWeight: '700', color: '#10b981' }}>
+              {hideBalances ? '••••' : `$${stableCoinsTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+            </div>
+            <div className="stat-desc">
+              {hideBalances ? '••••' : `≈ ฿${(stableCoinsTotal * rate).toLocaleString(undefined, { maximumFractionDigits: 0 })} THB`}
+            </div>
+          </div>
+
+          <div className="stat-card" style={{ flex: '1 1 200px' }}>
+            <div className="stat-label">📈 มูลค่าเหรียญอื่นๆ (BTC, ETH, ...)</div>
+            <div className="stat-value" style={{ fontSize: '1.6rem', fontWeight: '700', color: 'var(--accent-primary)' }}>
+              {hideBalances ? '••••' : `$${otherCoinsTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+            </div>
+            <div className="stat-desc">
+              {hideBalances ? '••••' : `≈ ฿${(otherCoinsTotal * rate).toLocaleString(undefined, { maximumFractionDigits: 0 })} THB`}
+            </div>
+          </div>
+        </div>
+
+        {/* Daily Crypto Net Worth Line Chart */}
+        {renderAssetDailyChart('crypto', 'Crypto')}
+
+        <div className="section-box" style={{ marginBottom: '24px' }}>
+          <div className="section-title">🔗 รายละเอียดกระเป๋า / Exchange Address</div>
+          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ background: 'rgba(255,255,255,0.03)', padding: '12px 20px', borderRadius: '8px', border: '1px solid var(--border-color)', flex: '1 1 auto' }}>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>ที่อยู่กระเป๋า (Wallet Address / Account Number)</div>
+              <div style={{ fontSize: '1.1rem', fontWeight: '600', color: '#fff', wordBreak: 'break-all', fontFamily: 'monospace' }}>{activeAcc.account_number}</div>
+            </div>
+            <div style={{ background: 'rgba(255,255,255,0.03)', padding: '12px 20px', borderRadius: '8px', border: '1px solid var(--border-color)', minWidth: '200px' }}>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>แพลตฟอร์มหลัก</div>
+              <div style={{ fontSize: '1.1rem', fontWeight: '600', color: 'var(--accent-secondary)' }}>{activeAcc.broker_name}</div>
+            </div>
           </div>
         </div>
 
@@ -3375,65 +3438,64 @@ function App() {
               </div>
             </div>
 
-            {/* Growth Curve Chart / Daily Forex Net Worth */}
-            {selectedAccountId === 'all' ? (
-              renderAssetDailyChart('forex', 'Forex')
-            ) : (
-              <div className="section-box" style={{ marginBottom: '32px' }}>
-                <div className="section-title">
-                  <span>กราฟการเติบโตพอร์ตการเทรด (Growth & Equity Curve)</span>
-                  <span style={{ fontSize: '0.85rem', fontWeight: '500', color: 'var(--text-secondary)' }}>
-                    แสดงค่า Balance และ Equity ปิดดีลรายวัน
-                  </span>
-                </div>
-                
-                <div style={{ width: '100%', height: 350 }}>
-                  <ResponsiveContainer>
-                    <AreaChart data={filteredEquityCurve} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="var(--accent-primary)" stopOpacity={0.2}/>
-                          <stop offset="95%" stopColor="var(--accent-primary)" stopOpacity={0}/>
-                        </linearGradient>
-                        <linearGradient id="colorEquity" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="var(--accent-secondary)" stopOpacity={0.15}/>
-                          <stop offset="95%" stopColor="var(--accent-secondary)" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                      <XAxis dataKey="date" stroke="var(--text-muted)" fontSize={11} tickLine={false} />
-                      <YAxis hide={hideBalances} stroke="var(--text-muted)" fontSize={11} tickLine={false} />
-                      <Tooltip 
-                        contentStyle={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-color)', borderRadius: '8px' }}
-                        labelStyle={{ color: '#fff', fontWeight: '600' }}
-                        formatter={(value, name, props) => {
-                          if (hideBalances) {
-                            return ['••••', name];
-                          }
-                          const payload = props.payload;
-                          const formattedVal = `${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${advancedStats.currency}`;
-                          if (name === "Balance" && payload) {
-                            const txType = payload.transaction_type || payload.transactionType;
-                            const txAmt = payload.transaction_amount || payload.transactionAmount;
-                            if (txType) {
-                              const prefix = txType === 'deposit' ? '📥 ฝากเงิน' : '📤 ถอนเงิน';
-                              const sign = txType === 'deposit' ? '+' : '-';
-                              return [
-                                `${formattedVal} (${prefix}: ${sign}${Number(txAmt).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${advancedStats.currency})`,
-                                name
-                              ];
-                            }
-                          }
-                          return [formattedVal, name];
-                        }}
-                      />
-                      <Area type="monotone" dataKey="balance" stroke="var(--accent-primary)" strokeWidth={2} fillOpacity={1} fill="url(#colorBalance)" name="Balance" dot={renderCustomDot} activeDot={{ r: 8 }} />
-                      <Area type="monotone" dataKey="equity" stroke="var(--accent-secondary)" strokeWidth={1.5} fillOpacity={1} fill="url(#colorEquity)" name="Equity" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
+            {/* Growth Curve Chart */}
+            <div className="section-box" style={{ marginBottom: '32px' }}>
+              <div className="section-title">
+                <span>กราฟการเติบโตพอร์ตการเทรด (Growth & Equity Curve)</span>
+                <span style={{ fontSize: '0.85rem', fontWeight: '500', color: 'var(--text-secondary)' }}>
+                  แสดงค่า Balance และ Equity ปิดดีลรายวัน
+                </span>
               </div>
-            )}
+              
+              <div style={{ width: '100%', height: 350 }}>
+                <ResponsiveContainer>
+                  <AreaChart data={filteredEquityCurve} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="var(--accent-primary)" stopOpacity={0.2}/>
+                        <stop offset="95%" stopColor="var(--accent-primary)" stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="colorEquity" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="var(--accent-secondary)" stopOpacity={0.15}/>
+                        <stop offset="95%" stopColor="var(--accent-secondary)" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                    <XAxis dataKey="date" stroke="var(--text-muted)" fontSize={11} tickLine={false} />
+                    <YAxis hide={hideBalances} stroke="var(--text-muted)" fontSize={11} tickLine={false} />
+                    <Tooltip 
+                      contentStyle={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-color)', borderRadius: '8px' }}
+                      labelStyle={{ color: '#fff', fontWeight: '600' }}
+                      formatter={(value, name, props) => {
+                        if (hideBalances) {
+                          return ['••••', name];
+                        }
+                        const payload = props.payload;
+                        const formattedVal = `${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${advancedStats.currency}`;
+                        if (name === "Balance" && payload) {
+                          const txType = payload.transaction_type || payload.transactionType;
+                          const txAmt = payload.transaction_amount || payload.transactionAmount;
+                          if (txType) {
+                            const prefix = txType === 'deposit' ? '📥 ฝากเงิน' : '📤 ถอนเงิน';
+                            const sign = txType === 'deposit' ? '+' : '-';
+                            return [
+                              `${formattedVal} (${prefix}: ${sign}${Number(txAmt).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${advancedStats.currency})`,
+                              name
+                            ];
+                          }
+                        }
+                        return [formattedVal, name];
+                      }}
+                    />
+                    <Area type="monotone" dataKey="balance" stroke="var(--accent-primary)" strokeWidth={2} fillOpacity={1} fill="url(#colorBalance)" name="Balance" dot={renderCustomDot} activeDot={{ r: 8 }} />
+                    <Area type="monotone" dataKey="equity" stroke="var(--accent-secondary)" strokeWidth={1.5} fillOpacity={1} fill="url(#colorEquity)" name="Equity" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Daily Forex Net Worth Line Chart */}
+            {selectedAccountId === 'all' && renderAssetDailyChart('forex', 'Forex')}
 
             {/* Calendar & Details Grid */}
             <div className="sections-grid">
@@ -3783,8 +3845,6 @@ function App() {
                 </table>
               </div>
             </div>
-            {/* Daily Forex Net Worth Line Chart */}
-            {selectedAccountId === 'all' && renderAssetDailyChart('forex', 'Forex')}
           </>
         ) : (
           <div className="section-box" style={{ textAlign: 'center', padding: '60px 20px' }}>
