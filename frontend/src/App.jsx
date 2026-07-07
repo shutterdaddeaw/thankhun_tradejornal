@@ -635,9 +635,10 @@ function App() {
     }
   };
 
-  const loadStockCandles = async (symbol) => {
+  const loadStockCandles = async (symbol, currency) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/v1/stock/candles/${symbol}`, { headers: getHeaders() });
+      const url = `${API_BASE_URL}/v1/stock/candles/${symbol}?currency=${currency || 'THB'}`;
+      const res = await fetch(url, { headers: getHeaders() });
       if (res.ok) {
         const data = await res.json();
         setStockCandles(data);
