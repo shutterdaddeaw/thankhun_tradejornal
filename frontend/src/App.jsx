@@ -42,7 +42,9 @@ import {
   Cell,
   BarChart,
   Bar,
-  Legend
+  Legend,
+  LineChart,
+  Line
 } from 'recharts';
 
 const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
@@ -298,20 +300,19 @@ function App() {
     }
   }, [token]);
 
-  // Load net worth snapshots when on networth tab and trigger today's snapshot
+  // Trigger today's snapshot once on dashboard load
   useEffect(() => {
-    if (page === 'dashboard' && activeTab === 'networth' && token) {
-      triggerNwSnapshot();        // best-effort upsert today
-      loadNwSnapshots(nwChartYear, nwChartMonth);
+    if (page === 'dashboard' && token) {
+      triggerNwSnapshot(); // best-effort upsert today
     }
-  }, [activeTab, page]);
+  }, [page, token]);
 
-  // Reload chart when month/year selector changes
+  // Load net worth snapshots for charts (available across Forex, Stock, Crypto, and Networth tabs)
   useEffect(() => {
-    if (page === 'dashboard' && activeTab === 'networth' && token) {
+    if (page === 'dashboard' && token) {
       loadNwSnapshots(nwChartYear, nwChartMonth);
     }
-  }, [nwChartYear, nwChartMonth]);
+  }, [page, token, nwChartYear, nwChartMonth, activeTab]);
 
   // Copy helper
   const handleCopy = (text) => {
@@ -847,6 +848,95 @@ function App() {
     } finally {
       setNwChartLoading(false);
     }
+  };
+
+  const renderAssetDailyChart = (assetKey, assetLabel, color) => {
+    const hasData = nwSnapshots.filter(d => d[assetKey] !== null).length > 0;
+    
+    return (
+      <div className="section-box" style={{ marginTop: '24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
+          <div className="section-title" style={{ margin: 0 }}>📅 มูลค่าสินทรัพย์รายวัน (Daily {assetLabel} — USD)</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              className="btn-secondary"
+              style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '0.85rem' }}
+              onClick={() => {
+                const m = nwChartMonth === 1 ? 12 : nwChartMonth - 1;
+                const y = nwChartMonth === 1 ? nwChartYear - 1 : nwChartYear;
+                setNwChartMonth(m); setNwChartYear(y);
+              }}
+            >‹</button>
+            <select
+              className="account-select"
+              style={{ padding: '4px 10px', fontSize: '0.85rem', minWidth: '110px' }}
+              value={nwChartMonth}
+              onChange={e => setNwChartMonth(Number(e.target.value))}
+            >
+              {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m, i) => (
+                <option key={i} value={i + 1}>{m}</option>
+              ))}
+            </select>
+            <select
+              className="account-select"
+              style={{ padding: '4px 10px', fontSize: '0.85rem', minWidth: '80px' }}
+              value={nwChartYear}
+              onChange={e => setNwChartYear(Number(e.target.value))}
+            >
+              {[new Date().getFullYear() - 1, new Date().getFullYear()].map(y => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+            <button
+              className="btn-secondary"
+              style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '0.85rem' }}
+              onClick={() => {
+                const m = nwChartMonth === 12 ? 1 : nwChartMonth + 1;
+                const y = nwChartMonth === 12 ? nwChartYear + 1 : nwChartYear;
+                setNwChartMonth(m); setNwChartYear(y);
+              }}
+            >›</button>
+          </div>
+        </div>
+
+        {nwChartLoading ? (
+          <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>⏳ Loading chart...</div>
+        ) : !hasData ? (
+          <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+            <div style={{ fontSize: '2rem', marginBottom: '8px' }}>📭</div>
+            <div>ยังไม่มีข้อมูลมูลค่าสินทรัพย์สำหรับเดือนนี้</div>
+            <div style={{ fontSize: '0.8rem', marginTop: '4px' }}>ระบบบันทึกภาพรวมเวลาเที่ยงคืน (Asia/Bangkok)</div>
+          </div>
+        ) : (
+          <div style={{ width: '100%', height: 260 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={nwSnapshots} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
+                <XAxis
+                  dataKey="day"
+                  tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={v => v >= 1000 ? `$${(v/1000).toFixed(0)}k` : `$${v}`}
+                  width={52}
+                />
+                <Tooltip
+                  contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '10px', fontSize: '0.83rem' }}
+                  formatter={(value) => value != null ? [`$${Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 })}`, assetLabel] : ['-', assetLabel]}
+                  labelFormatter={label => `Day ${label}`}
+                />
+                <Line type="monotone" dataKey={assetKey} name={assetLabel} stroke={color} strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} connectNulls />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+    );
   };
 
   const triggerNwSnapshot = async () => {
@@ -2220,22 +2310,34 @@ function App() {
               <table className="custom-table">
                 <thead><tr>
                   <th>ชื่อพอร์ต</th><th>โบรกเกอร์</th>
-                  <th style={{ textAlign: 'right' }}>มูลค่าพอร์ต (THB)</th>
+                  <th style={{ textAlign: 'right' }}>มูลค่าพอร์ต (Value)</th>
                 </tr></thead>
                 <tbody>
-                  {stockAccs.map(acc => (
-                    <tr key={acc.id}>
-                      <td style={{ fontWeight: '600' }}>{acc.account_name}</td>
-                      <td>{acc.broker_name}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--accent-secondary)' }}>
-                        {hideBalances ? '••••' : `${acc.equity.toLocaleString(undefined, { minimumFractionDigits: 2 })} THB`}
-                      </td>
-                    </tr>
-                  ))}
+                  {stockAccs.map(acc => {
+                    const isUSD = acc.currency === 'USD';
+                    const rateVal = usdThbRate || 33.0;
+                    return (
+                      <tr key={acc.id}>
+                        <td style={{ fontWeight: '600' }}>{acc.account_name}</td>
+                        <td>{acc.broker_name}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--accent-secondary)' }}>
+                          {hideBalances ? '••••' : (
+                            isUSD ? (
+                              `$${acc.equity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD (~฿${(acc.equity * rateVal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} THB)`
+                            ) : (
+                              `฿${acc.equity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} THB`
+                            )
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           </div>
+          {/* Daily Stock Net Worth Line Chart */}
+          {renderAssetDailyChart('stock_usd', 'Stocks', '#f59e0b')}
         </div>
       );
     }
@@ -2601,6 +2703,8 @@ function App() {
               </table>
             </div>
           </div>
+          {/* Daily Crypto Net Worth Line Chart */}
+          {renderAssetDailyChart('crypto_usd', 'Crypto', '#10b981')}
         </div>
       );
     }
@@ -3590,6 +3694,8 @@ function App() {
                 </table>
               </div>
             </div>
+            {/* Daily Forex Net Worth Line Chart */}
+            {selectedAccountId === 'all' && renderAssetDailyChart('forex_usd', 'Forex', '#818cf8')}
           </>
         ) : (
           <div className="section-box" style={{ textAlign: 'center', padding: '60px 20px' }}>
