@@ -367,12 +367,6 @@ def ingest_heartbeat(
         sync_state.last_successful_sync_time = datetime.utcnow()
         sync_state.last_sync_time = datetime.utcnow()
         
-    event = ConnectionEvent(
-        account_id=account.id,
-        event_type="publisher_heartbeat",
-        message="Publisher EA heartbeat received."
-    )
-    db.add(event)
     db.commit()
     
     return {"status": "success", "message": "Heartbeat acknowledged"}
