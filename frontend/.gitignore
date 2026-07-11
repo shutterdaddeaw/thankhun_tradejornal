@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# MetaTrader 5 EA files
+JornaltradePublisherEA.mq5
+JornaltradePublisherEA.ex5
