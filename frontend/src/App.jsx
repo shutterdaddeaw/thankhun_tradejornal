@@ -2494,7 +2494,7 @@ function App() {
   const renderStockTab = () => {
     // Combined view for all stock portfolios
     if (selectedAccountId === 'all-stock') {
-      const stockAccs = accounts.filter(a => a.account_type === 'stock');
+      const stockAccs = accounts.filter(a => a.account_type === 'stock' && (showArchived || a.status !== 'archived'));
       const rate = usdThbRate || 33.0;
       const allMarketValue = allStockHoldings.reduce((s, h) => {
         const val = h.volume * h.current_price;
@@ -2562,9 +2562,22 @@ function App() {
           {renderAssetDailyChart('stock', 'Stocks')}
 
           <div className="section-box" style={{ marginTop: '24px' }}>
-            <div className="section-title">
-              <span>📊 สรุปแต่ละพอร์ตหุ้น (Portfolio Breakdown)</span>
-              <span className="badge" style={{ background: 'rgba(0,255,209,0.1)', color: 'var(--accent-secondary)' }}>{stockAccs.length} พอร์ต</span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+              <div className="section-title" style={{ margin: 0 }}>
+                <span>📊 สรุปแต่ละพอร์ตหุ้น (Portfolio Breakdown)</span>
+                <span className="badge" style={{ background: 'rgba(0,255,209,0.1)', color: 'var(--accent-secondary)', marginLeft: '8px' }}>
+                  {stockAccs.length} พอร์ต
+                </span>
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
+                <input 
+                  type="checkbox" 
+                  checked={showArchived} 
+                  onChange={(e) => setShowArchived(e.target.checked)} 
+                  style={{ cursor: 'pointer', width: '15px', height: '15px' }}
+                />
+                แสดงพอร์ตที่เก็บเข้ากรุ (Show Archived)
+              </label>
             </div>
             <div className="table-wrapper">
               <table className="custom-table">
@@ -2576,9 +2589,19 @@ function App() {
                   {stockAccs.map(acc => {
                     const isUSD = acc.currency === 'USD';
                     const rateVal = usdThbRate || 33.0;
+                    const isArchived = acc.status === 'archived';
                     return (
-                      <tr key={acc.id}>
-                        <td style={{ fontWeight: '600' }}>{acc.account_name}</td>
+                      <tr key={acc.id} style={isArchived ? { opacity: 0.6, fontStyle: 'italic', background: 'rgba(255, 255, 255, 0.01)' } : {}}>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '600' }}>
+                            {acc.account_name}
+                            {isArchived && (
+                              <span className="badge" style={{ background: 'var(--border-color)', color: 'var(--text-muted)', fontSize: '0.65rem', padding: '2px 6px', textTransform: 'uppercase' }}>
+                                Archived
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td>{acc.broker_name}</td>
                         <td style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--accent-secondary)' }}>
                           {hideBalances ? '••••' : (
@@ -2943,7 +2966,7 @@ function App() {
   const renderCryptoTab = () => {
     // Combined view for all crypto wallets
     if (selectedAccountId === 'all-crypto') {
-      const cryptoAccs = accounts.filter(a => a.account_type === 'crypto');
+      const cryptoAccs = accounts.filter(a => a.account_type === 'crypto' && (showArchived || a.status !== 'archived'));
       const allCryptoTotal = allCryptoHoldings.reduce((s, h) => s + h.value_usd, 0);
       const rate = usdThbRate || 33.0;
 
@@ -2999,9 +3022,22 @@ function App() {
           {renderAssetDailyChart('crypto', 'Crypto')}
 
           <div className="section-box" style={{ marginTop: '24px' }}>
-            <div className="section-title">
-              <span>📊 สรุปแต่ละกระเป๋า (Wallet Breakdown)</span>
-              <span className="badge" style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981' }}>{cryptoAccs.length} กระเป๋า</span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+              <div className="section-title" style={{ margin: 0 }}>
+                <span>📊 สรุปแต่ละกระเป๋า (Wallet Breakdown)</span>
+                <span className="badge" style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981', marginLeft: '8px' }}>
+                  {cryptoAccs.length} กระเป๋า
+                </span>
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
+                <input 
+                  type="checkbox" 
+                  checked={showArchived} 
+                  onChange={(e) => setShowArchived(e.target.checked)} 
+                  style={{ cursor: 'pointer', width: '15px', height: '15px' }}
+                />
+                แสดงพอร์ตที่เก็บเข้ากรุ (Show Archived)
+              </label>
             </div>
             <div className="table-wrapper">
               <table className="custom-table">
@@ -3012,18 +3048,30 @@ function App() {
                   <th style={{ textAlign: 'right' }}>มูลค่า (THB)</th>
                 </tr></thead>
                 <tbody>
-                  {cryptoAccs.map(acc => (
-                    <tr key={acc.id}>
-                      <td style={{ fontWeight: '600' }}>{acc.account_name}</td>
-                      <td>{acc.broker_name}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--accent-secondary)' }}>
-                        {hideBalances ? '••••' : `$${acc.equity.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-                      </td>
-                      <td style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>
-                        {hideBalances ? '••••' : `฿${(acc.equity * rate).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
-                      </td>
-                    </tr>
-                  ))}
+                  {cryptoAccs.map(acc => {
+                    const isArchived = acc.status === 'archived';
+                    return (
+                      <tr key={acc.id} style={isArchived ? { opacity: 0.6, fontStyle: 'italic', background: 'rgba(255, 255, 255, 0.01)' } : {}}>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '600' }}>
+                            {acc.account_name}
+                            {isArchived && (
+                              <span className="badge" style={{ background: 'var(--border-color)', color: 'var(--text-muted)', fontSize: '0.65rem', padding: '2px 6px', textTransform: 'uppercase' }}>
+                                Archived
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td>{acc.broker_name}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--accent-secondary)' }}>
+                          {hideBalances ? '••••' : `$${acc.equity.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                        </td>
+                        <td style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>
+                          {hideBalances ? '••••' : `฿${(acc.equity * rate).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -3452,11 +3500,22 @@ function App() {
             {/* Portfolio Breakdown (Only in Combined view) */}
             {selectedAccountId === 'all' && (
               <div className="section-box" style={{ marginBottom: '32px' }}>
-                <div className="section-title">
-                  <span>ตารางสรุปสถานะแต่ละพอร์ต (Portfolio Breakdown)</span>
-                  <span className="badge" style={{ background: 'rgba(0, 255, 209, 0.1)', color: 'var(--accent-secondary)' }}>
-                    {accounts.filter(a => !a.account_type || a.account_type === 'forex').length} พอร์ต Forex
-                  </span>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+                  <div className="section-title" style={{ margin: 0 }}>
+                    <span>ตารางสรุปสถานะแต่ละพอร์ต (Portfolio Breakdown)</span>
+                    <span className="badge" style={{ background: 'rgba(0, 255, 209, 0.1)', color: 'var(--accent-secondary)', marginLeft: '8px' }}>
+                      {accounts.filter(a => (!a.account_type || a.account_type === 'forex') && (showArchived || a.status !== 'archived')).length} พอร์ต Forex
+                    </span>
+                  </div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={showArchived} 
+                      onChange={(e) => setShowArchived(e.target.checked)} 
+                      style={{ cursor: 'pointer', width: '15px', height: '15px' }}
+                    />
+                    แสดงพอร์ตที่เก็บเข้ากรุ (Show Archived)
+                  </label>
                 </div>
                 
                 <div className="table-wrapper">
@@ -3476,60 +3535,72 @@ function App() {
                     </thead>
                     <tbody>
                       {accounts
-                        .filter(a => !a.account_type || a.account_type === 'forex')
-                        .map(acc => (
-                        <tr key={acc.id}>
-                          <td style={{ fontWeight: '600' }}>{acc.account_name}</td>
-                          <td>{acc.broker_name}</td>
-                          <td style={{ fontFamily: 'monospace' }}>{acc.account_number}</td>
-                          <td style={{ whiteSpace: 'nowrap' }}>
-                            <span className="badge badge-success" style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-                              {acc.connection_type === 'publisher_ea' ? '🤖 MT5 EA' : '🔗 Broker Direct'}
-                            </span>
-                          </td>
-                          <td>
-                            {hideBalances ? '••••' : `${acc.balance.toLocaleString()} ${acc.currency}`}
-                            {isCentCurrency(acc.currency) && (
-                              <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                {hideBalances ? '($•••• USD)' : `(${(acc.balance / 100).toLocaleString()} USD)`}
-                              </span>
-                            )}
-                          </td>
-                          <td>
-                            {hideBalances ? '••••' : `${acc.equity.toLocaleString()} ${acc.currency}`}
-                            {isCentCurrency(acc.currency) && (
-                              <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                {hideBalances ? '($•••• USD)' : `(${(acc.equity / 100).toLocaleString()} USD)`}
-                              </span>
-                            )}
-                          </td>
-                          <td className={acc.profit >= 0 ? 'up' : 'down'} style={{ fontWeight: '700' }}>
-                            {acc.profit >= 0 ? '+' : ''}{acc.profit.toLocaleString()} {acc.currency}
-                            {isCentCurrency(acc.currency) && (
-                              <span style={{ display: 'block', fontSize: '0.75rem', color: acc.profit >= 0 ? 'var(--success)' : 'var(--error)' }}>
-                                ({acc.profit >= 0 ? '+' : ''}${(acc.profit / 100).toLocaleString()} USD)
-                              </span>
-                            )}
-                          </td>
-                          <td>
-                            <span className={`badge ${acc.status === 'active_publisher_ea' ? 'badge-success' : 'badge-error'}`} style={{ textTransform: 'uppercase', fontSize: '0.75rem' }}>
-                              {acc.status === 'active_publisher_ea' ? 'Online' : 'Offline'}
-                            </span>
-                          </td>
-                          <td>
-                            <button 
-                              className="btn-secondary" 
-                              style={{ padding: '4px 10px', fontSize: '0.8rem' }}
-                              onClick={() => {
-                                setSelectedAccountId(acc.id.toString());
-                                loadAccountData(acc.id.toString());
-                              }}
-                            >
-                              เจาะลึกพอร์ต
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                        .filter(a => (!a.account_type || a.account_type === 'forex') && (showArchived || a.status !== 'archived'))
+                        .map(acc => {
+                          const isArchived = acc.status === 'archived';
+                          return (
+                            <tr key={acc.id} style={isArchived ? { opacity: 0.6, fontStyle: 'italic', background: 'rgba(255, 255, 255, 0.01)' } : {}}>
+                              <td>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '600' }}>
+                                  {acc.account_name}
+                                  {isArchived && (
+                                    <span className="badge" style={{ background: 'var(--border-color)', color: 'var(--text-muted)', fontSize: '0.65rem', padding: '2px 6px', textTransform: 'uppercase' }}>
+                                      Archived
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td>{acc.broker_name}</td>
+                              <td style={{ fontFamily: 'monospace' }}>{acc.account_number}</td>
+                              <td style={{ whiteSpace: 'nowrap' }}>
+                                <span className="badge badge-success" style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                                  {acc.connection_type === 'publisher_ea' ? '🤖 MT5 EA' : '🔗 Broker Direct'}
+                                </span>
+                              </td>
+                              <td>
+                                {hideBalances ? '••••' : `${acc.balance.toLocaleString()} ${acc.currency}`}
+                                {isCentCurrency(acc.currency) && (
+                                  <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                    {hideBalances ? '($•••• USD)' : `(${(acc.balance / 100).toLocaleString()} USD)`}
+                                  </span>
+                                )}
+                              </td>
+                              <td>
+                                {hideBalances ? '••••' : `${acc.equity.toLocaleString()} ${acc.currency}`}
+                                {isCentCurrency(acc.currency) && (
+                                  <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                    {hideBalances ? '($•••• USD)' : `(${(acc.equity / 100).toLocaleString()} USD)`}
+                                  </span>
+                                )}
+                              </td>
+                              <td className={acc.profit >= 0 ? 'up' : 'down'} style={{ fontWeight: '700' }}>
+                                {acc.profit >= 0 ? '+' : ''}{acc.profit.toLocaleString()} {acc.currency}
+                                {isCentCurrency(acc.currency) && (
+                                  <span style={{ display: 'block', fontSize: '0.75rem', color: acc.profit >= 0 ? 'var(--success)' : 'var(--error)' }}>
+                                    ({acc.profit >= 0 ? '+' : ''}${(acc.profit / 100).toLocaleString()} USD)
+                                  </span>
+                                )}
+                              </td>
+                              <td>
+                                <span className={`badge ${isArchived ? 'badge-info' : acc.status === 'active_publisher_ea' ? 'badge-success' : 'badge-error'}`} style={{ textTransform: 'uppercase', fontSize: '0.75rem', background: isArchived ? 'rgba(255,255,255,0.06)' : undefined, color: isArchived ? 'var(--text-muted)' : undefined }}>
+                                  {isArchived ? 'Archived' : acc.status === 'active_publisher_ea' ? 'Online' : 'Offline'}
+                                </span>
+                              </td>
+                              <td>
+                                <button 
+                                  className="btn-secondary" 
+                                  style={{ padding: '4px 10px', fontSize: '0.8rem' }}
+                                  onClick={() => {
+                                    setSelectedAccountId(acc.id.toString());
+                                    loadAccountData(acc.id.toString());
+                                  }}
+                                >
+                                  เจาะลึกพอร์ต
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
                     </tbody>
                   </table>
                 </div>
