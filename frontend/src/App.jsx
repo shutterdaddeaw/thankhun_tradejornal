@@ -81,6 +81,7 @@ function App() {
   // Dashboard states
   const [accounts, setAccounts] = useState([]);
   const [selectedAccountId, setSelectedAccountId] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
   const [dashboardStats, setDashboardStats] = useState(null);
   const [equityCurve, setEquityCurve] = useState([]);
   const [calendarPnl, setCalendarPnl] = useState([]);
@@ -164,6 +165,7 @@ function App() {
   const [editLeverage, setEditLeverage] = useState('100');
   const [editConnectionType, setEditConnectionType] = useState('publisher_ea');
   const [editCurrency, setEditCurrency] = useState('USD');
+  const [editStatus, setEditStatus] = useState('');
   const [isAiLoading, setIsAiLoading] = useState(false);
 
   // Form states
@@ -466,6 +468,7 @@ function App() {
       setEditLeverage(activeAcc.leverage.toString());
       setEditConnectionType(activeAcc.connection_type);
       setEditCurrency(activeAcc.currency || 'USD');
+      setEditStatus(activeAcc.status || 'active_publisher_ea');
       setShowEditAccountModal(true);
     }
   };
@@ -479,7 +482,8 @@ function App() {
         server_name: editServerName,
         leverage: parseInt(editLeverage) || 100,
         connection_type: editConnectionType,
-        currency: editCurrency
+        currency: editCurrency,
+        status: editStatus
       };
 
       const activeAcc = accounts.find(a => a.id.toString() === selectedAccountId);
@@ -1041,8 +1045,16 @@ function App() {
     }
   };
 
-  const loadAllAccountsCombinedData = async (accountsList) => {
-    if (!accountsList || accountsList.length === 0) return;
+  const loadAllAccountsCombinedData = async (accountsListRaw) => {
+    const accountsList = (accountsListRaw || []).filter(a => a.status !== 'archived');
+    if (accountsList.length === 0) {
+      setDashboardStats(null);
+      setClosedTrades([]);
+      setOpenPositions([]);
+      setEquityCurve([]);
+      setCalendarPnl([]);
+      return;
+    }
     setIsSyncing(true);
     try {
       // 1. Fetch dashboard stats for all accounts
@@ -1984,16 +1996,16 @@ function App() {
       return { usd: balanceUSD, thb: balanceTHB };
     };
 
-    const forexAccs = accounts.filter(a => !a.account_type || a.account_type === 'forex');
-    const stockAccs = accounts.filter(a => a.account_type === 'stock');
-    const cryptoAccs = accounts.filter(a => a.account_type === 'crypto');
+    const activeForexAccs = accounts.filter(a => (!a.account_type || a.account_type === 'forex') && a.status !== 'archived');
+    const activeStockAccs = accounts.filter(a => a.account_type === 'stock' && a.status !== 'archived');
+    const activeCryptoAccs = accounts.filter(a => a.account_type === 'crypto' && a.status !== 'archived');
 
-    const forexTotal = forexAccs.reduce((sum, a) => sum + (isCentCurrency(a.currency) ? a.balance / 100 : a.balance), 0);
-    const stockTotal = stockAccs.reduce((sum, a) => {
+    const forexTotal = activeForexAccs.reduce((sum, a) => sum + (isCentCurrency(a.currency) ? a.balance / 100 : a.balance), 0);
+    const stockTotal = activeStockAccs.reduce((sum, a) => {
       const isUSD = a.currency === 'USD';
       return sum + (isUSD ? a.balance * rate : a.balance);
     }, 0);
-    const cryptoTotal = cryptoAccs.reduce((sum, a) => sum + a.balance, 0);
+    const cryptoTotal = activeCryptoAccs.reduce((sum, a) => sum + a.balance, 0);
 
     const forexUSD = forexTotal;
     const stockUSD = stockTotal / rate;
@@ -2016,7 +2028,9 @@ function App() {
       }
     };
 
-    const sortedAccounts = [...accounts].sort((a, b) => {
+    const sortedAccounts = [...accounts]
+      .filter(a => showArchived || a.status !== 'archived')
+      .sort((a, b) => {
       let va, vb;
       if (nwSortKey === 'account_name') { va = a.account_name?.toLowerCase(); vb = b.account_name?.toLowerCase(); }
       else if (nwSortKey === 'account_type') { va = (a.account_type || 'forex'); vb = (b.account_type || 'forex'); }
@@ -2089,7 +2103,7 @@ function App() {
             <div style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
               {hideBalances ? '••••' : `≈ ฿${(forexTotal * rate).toLocaleString(undefined, { maximumFractionDigits: 0 })} THB`}
             </div>
-            <div className="stat-desc">{forexAccs.length} พอร์ตเทรด MT5</div>
+            <div className="stat-desc">{activeForexAccs.length} พอร์ตเทรด MT5</div>
           </div>
 
           {/* Thai Stocks */}
@@ -2101,7 +2115,7 @@ function App() {
             <div style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
               {hideBalances ? '••••' : `≈ $${stockUSD.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`}
             </div>
-            <div className="stat-desc">{stockAccs.length} บัญชีหุ้นไทย</div>
+            <div className="stat-desc">{activeStockAccs.length} บัญชีหุ้นไทย</div>
           </div>
 
           {/* Crypto */}
@@ -2113,7 +2127,7 @@ function App() {
             <div style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
               {hideBalances ? '••••' : `≈ ฿${(cryptoTotal * rate).toLocaleString(undefined, { maximumFractionDigits: 0 })} THB`}
             </div>
-            <div className="stat-desc">{cryptoAccs.length} ที่อยู่กระเป๋า / Exchange</div>
+            <div className="stat-desc">{activeCryptoAccs.length} ที่อยู่กระเป๋า / Exchange</div>
           </div>
         </div>
 
@@ -2262,7 +2276,18 @@ function App() {
 
           {/* Sortable All-Portfolios Table */}
           <div className="section-box">
-            <div className="section-title">💼 พอร์ตการลงทุนทั้งหมด (All Portfolios)</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+              <div className="section-title" style={{ margin: 0 }}>💼 พอร์ตการลงทุนทั้งหมด (All Portfolios)</div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
+                <input 
+                  type="checkbox" 
+                  checked={showArchived} 
+                  onChange={(e) => setShowArchived(e.target.checked)} 
+                  style={{ cursor: 'pointer', width: '15px', height: '15px' }}
+                />
+                แสดงพอร์ตที่เก็บเข้ากรุ (Show Archived)
+              </label>
+            </div>
             <div className="table-wrapper">
               <table className="custom-table">
                 <thead>
@@ -2291,8 +2316,9 @@ function App() {
                   {sortedAccounts.map(acc => {
                     const { usd, thb } = getAccountBalances(acc);
                     const isUSDNative = acc.currency === 'USD' || acc.currency === 'USC' || acc.currency === 'USCENT';
+                    const isArchived = acc.status === 'archived';
                     return (
-                      <tr key={acc.id}>
+                      <tr key={acc.id} style={isArchived ? { opacity: 0.6, fontStyle: 'italic', background: 'rgba(255, 255, 255, 0.01)' } : {}}>
                         <td>
                           <span
                             className={`badge ${acc.account_type === 'stock' ? 'badge-success' : acc.account_type === 'crypto' ? 'badge-secondary' : 'badge-info'}`}
@@ -2302,7 +2328,16 @@ function App() {
                           </span>
                         </td>
                         <td>{acc.broker_name}</td>
-                        <td style={{ fontWeight: '600' }}>{acc.account_name}</td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '600' }}>
+                            {acc.account_name}
+                            {isArchived && (
+                              <span className="badge" style={{ background: 'var(--border-color)', color: 'var(--text-muted)', fontSize: '0.65rem', padding: '2px 6px', textTransform: 'uppercase' }}>
+                                Archived
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td style={{ fontFamily: 'monospace', fontSize: '0.8rem', maxWidth: '140px', wordBreak: 'break-all', whiteSpace: 'normal', lineHeight: '1.2' }}>
                           {acc.account_number || '-'}
                         </td>
@@ -2323,7 +2358,7 @@ function App() {
                       </tr>
                     );
                   })}
-                  {accounts.length > 0 && (
+                  {sortedAccounts.length > 0 && (
                     <tr style={{ background: 'rgba(255,255,255,0.04)', fontWeight: 'bold' }}>
                       <td colSpan={4} style={{ textAlign: 'left', padding: '12px 16px', color: '#fff' }}>รวมทุกพอร์ต (Total)</td>
                       <td style={{ textAlign: 'right', color: 'var(--success)', fontSize: '1.05rem', borderTop: '2px double var(--border-color)' }}>
@@ -2334,7 +2369,7 @@ function App() {
                       </td>
                     </tr>
                   )}
-                  {accounts.length === 0 && (
+                  {sortedAccounts.length === 0 && (
                     <tr><td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>ไม่มีพอร์ตการลงทุนในระบบ</td></tr>
                   )}
                 </tbody>
@@ -3235,10 +3270,13 @@ function App() {
                 )}
                 {accounts
                   .filter(acc => {
-                    if (activeTab === 'forex') return !acc.account_type || acc.account_type === 'forex';
-                    if (activeTab === 'stock') return acc.account_type === 'stock';
-                    if (activeTab === 'crypto') return acc.account_type === 'crypto';
-                    return true;
+                    let tabMatch = true;
+                    if (activeTab === 'forex') tabMatch = !acc.account_type || acc.account_type === 'forex';
+                    else if (activeTab === 'stock') tabMatch = acc.account_type === 'stock';
+                    else if (activeTab === 'crypto') tabMatch = acc.account_type === 'crypto';
+                    
+                    if (!tabMatch) return false;
+                    return showArchived || acc.status !== 'archived' || acc.id.toString() === selectedAccountId;
                   })
                   .map(acc => (
                     <option key={acc.id} value={acc.id}>
@@ -4253,6 +4291,30 @@ function App() {
                 </div>
               )}
 
+              <div className="form-group" style={{ marginTop: '20px', marginBottom: '20px' }}>
+                <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 'bold', color: 'var(--text-secondary)' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={editStatus === 'archived'} 
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setEditStatus('archived');
+                      } else {
+                        const isStock = activeAcc.account_type === 'stock';
+                        const isCrypto = activeAcc.account_type === 'crypto';
+                        const defaultActive = isStock || isCrypto ? 'active' : 'active_publisher_ea';
+                        setEditStatus(defaultActive);
+                      }
+                    }} 
+                    style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                  />
+                  📦 เก็บพอร์ตนี้เข้ากรุถาวร (Archive Portfolio)
+                </label>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginTop: '4px', paddingLeft: '24px' }}>
+                  พอร์ตที่เก็บเข้ากรุจะถูกซ่อนจากหน้าหลักและไม่นำยอดเงินมารวมคำนวณ แต่จะยังคงเก็บข้อมูลประวัติย้อนหลังไว้ทั้งหมดเพื่อกราฟที่ถูกต้องในอดีต
+                </span>
+              </div>
+
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '32px' }}>
                 <div style={{ display: 'flex', gap: '12px' }}>
                   <button type="submit" className="btn-primary" style={{ width: 'auto', padding: '10px 24px' }}>บันทึกการแก้ไข</button>
@@ -4312,7 +4374,7 @@ function App() {
                 </button>
                 <button className={`sidebar-item ${activeTab === 'stock' ? 'active' : ''}`} onClick={() => {
                   setActiveTab('stock');
-                  const stockAccs = accounts.filter(a => a.account_type === 'stock');
+                  const stockAccs = accounts.filter(a => a.account_type === 'stock' && a.status !== 'archived');
                   if (stockAccs.length > 1) {
                     setSelectedAccountId('all-stock');
                     loadAllStockData();
@@ -4327,7 +4389,7 @@ function App() {
                 </button>
                 <button className={`sidebar-item ${activeTab === 'crypto' ? 'active' : ''}`} onClick={() => {
                   setActiveTab('crypto');
-                  const cryptoAccs = accounts.filter(a => a.account_type === 'crypto');
+                  const cryptoAccs = accounts.filter(a => a.account_type === 'crypto' && a.status !== 'archived');
                   if (cryptoAccs.length > 1) {
                     setSelectedAccountId('all-crypto');
                     loadAllCryptoData();
